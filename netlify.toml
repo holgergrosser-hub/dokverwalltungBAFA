@@ -1,0 +1,17 @@
+# Netlify Build Configuration
+
+[build]
+  command = "npm install && npm run build"
+  publish = "dist"
+
+# Redirects für SPA
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Environment Variables Dokumentation (wird nicht deployed)
+# Diese müssen in Netlify Dashboard gesetzt werden:
+# 
+# VITE_API_URL = https://script.google.com/macros/s/DEINE_ID/exec
+# VITE_API_PASSWORD = dein-sicheres-passwort
