@@ -38,19 +38,30 @@ function BAFADokumente() {
   }, []);
 
   // ==========================================
-  // API CALLS
+  // API CALLS - CORS-FIX mit FormData
   // ==========================================
 
+  /**
+   * CORS-FIX: Google Apps Script benötigt FormData statt JSON
+   * KEIN Content-Type Header setzen - Browser setzt automatisch multipart/form-data
+   */
   const apiCall = async (action, additionalData = {}) => {
+    const payload = {
+      action,
+      password: API_PASSWORD,
+      ...additionalData
+    };
+    
+    // FormData für Google Apps Script (vermeidet CORS-Preflight)
+    const formData = new FormData();
+    formData.append('data', JSON.stringify(payload));
+    
     const response = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action,
-        password: API_PASSWORD,
-        ...additionalData
-      })
+      body: formData
+      // WICHTIG: KEIN Content-Type Header!
     });
+    
     return await response.json();
   };
 
@@ -545,7 +556,7 @@ function BAFADokumente() {
 
       {/* Footer */}
       <div style={styles.footer}>
-        <p>BAFA Dokumente System v2.0</p>
+        <p>BAFA Dokumente System v2.1 (CORS-Fix)</p>
       </div>
     </div>
   );
