@@ -159,16 +159,33 @@ function BAFADokumente() {
         newParentFolderId.trim() || undefined
       );
 
-      const created = data.customer;
-      await loadCustomers();
+      // Backend responses can differ (e.g. `{ customer: {...} }` vs flat object).
+      const created =
+        data?.customer ??
+        data?.createdCustomer ??
+        data?.data?.customer ??
+        (data && typeof data === 'object' ? data : null);
 
-      if (created?.kundeId) {
-        await handleSelectCustomer(created.kundeId);
+      const createdId = created?.kundeId ?? data?.kundeId ?? null;
+      const createdName = created?.companyName ?? newCompanyName.trim();
+
+      const refreshedCustomers = await loadCustomers();
+
+      if (createdId) {
+        await handleSelectCustomer(createdId);
+      } else if (createdName && Array.isArray(refreshedCustomers)) {
+        const matches = refreshedCustomers.filter(
+          (c) => (c?.companyName || '').toLowerCase() === createdName.toLowerCase()
+        );
+        const bestMatch = matches[matches.length - 1];
+        if (bestMatch?.kundeId) {
+          await handleSelectCustomer(bestMatch.kundeId);
+        }
       }
 
       setNewCompanyName('');
       setNewParentFolderId('');
-      setResult({ message: `Kunde erstellt: ${created?.companyName || ''}` });
+      setResult({ message: `Kunde erstellt: ${created?.companyName || createdName || ''}` });
     } catch (err) {
       setError('Kunde erstellen fehlgeschlagen: ' + err.message);
     } finally {
