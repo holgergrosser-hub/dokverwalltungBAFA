@@ -32,12 +32,18 @@ exports.handler = async (event) => {
   const apiPassword = process.env.BAFA_API_PASSWORD;
 
   if (!apiUrl || !apiPassword) {
+    const presentBafaKeys = Object.keys(process.env || {}).filter((k) => k.startsWith('BAFA_'));
     return {
       statusCode: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         error: 'Server not configured',
-        message: 'Missing BAFA_API_URL and/or BAFA_API_PASSWORD on Netlify'
+        message: 'Missing BAFA_API_URL and/or BAFA_API_PASSWORD on Netlify',
+        missing: {
+          BAFA_API_URL: !apiUrl,
+          BAFA_API_PASSWORD: !apiPassword
+        },
+        presentKeys: presentBafaKeys
       })
     };
   }
