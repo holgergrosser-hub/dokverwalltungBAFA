@@ -15,6 +15,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST,OPTIONS'
 };
 
+const PROXY_VERSION = '2026-01-16a';
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' };
@@ -23,8 +25,8 @@ exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Method Not Allowed' })
+      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-BAFA-Proxy-Version': PROXY_VERSION },
+      body: JSON.stringify({ error: 'Method Not Allowed', proxyVersion: PROXY_VERSION })
     };
   }
 
@@ -35,10 +37,11 @@ exports.handler = async (event) => {
     const presentBafaKeys = Object.keys(process.env || {}).filter((k) => k.startsWith('BAFA_'));
     return {
       statusCode: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-BAFA-Proxy-Version': PROXY_VERSION },
       body: JSON.stringify({
         error: 'Server not configured',
         message: 'Missing BAFA_API_URL and/or BAFA_API_PASSWORD on Netlify',
+        proxyVersion: PROXY_VERSION,
         missing: {
           BAFA_API_URL: !apiUrl,
           BAFA_API_PASSWORD: !apiPassword
@@ -86,16 +89,17 @@ exports.handler = async (event) => {
 
     return {
       statusCode: response.status,
-      headers: { ...corsHeaders, 'Content-Type': contentType },
+      headers: { ...corsHeaders, 'Content-Type': contentType, 'X-BAFA-Proxy-Version': PROXY_VERSION },
       body: bodyText
     };
   } catch (err) {
     return {
       statusCode: 502,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-BAFA-Proxy-Version': PROXY_VERSION },
       body: JSON.stringify({
         error: 'Upstream request failed',
-        message: err?.message || String(err)
+        message: err?.message || String(err),
+        proxyVersion: PROXY_VERSION
       })
     };
   }
