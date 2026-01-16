@@ -4,11 +4,27 @@
   command = "npm install && npm run build"
   publish = "dist"
 
+[functions]
+  directory = "netlify/functions"
+
 # Redirects für SPA
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Cache headers
+# - index.html should not be cached to ensure new deploys load immediately
+# - hashed assets can be cached aggressively
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
 
 # Environment Variables Dokumentation (wird nicht deployed)
 # Diese müssen in Netlify Dashboard gesetzt werden:

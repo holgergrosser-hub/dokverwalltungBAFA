@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { createBafaApi } from './api/bafaApi';
 
 /**
  * BAFA DOKUMENTE - HAUPTKOMPONENTE
@@ -9,6 +10,20 @@ function BAFADokumente() {
   // API Config
   const API_URL = import.meta.env.VITE_API_URL;
   const API_PASSWORD = import.meta.env.VITE_API_PASSWORD;
+  const API_TRANSPORT = import.meta.env.VITE_API_TRANSPORT;
+
+  const apiConfigError = useMemo(() => {
+    if (!API_URL) return 'API nicht konfiguriert: VITE_API_URL fehlt.';
+    if (API_URL.includes('script.google.com/macros/') && !API_PASSWORD) {
+      return 'API nicht konfiguriert: VITE_API_PASSWORD fehlt (bei direktem Apps-Script Call).';
+    }
+    return null;
+  }, [API_URL, API_PASSWORD]);
+
+  const api = useMemo(() => {
+    if (apiConfigError) return null;
+    return createBafaApi({ apiUrl: API_URL, apiPassword: API_PASSWORD, transport: API_TRANSPORT });
+  }, [API_URL, API_PASSWORD, API_TRANSPORT, apiConfigError]);
 
   // State
   const [customers, setCustomers] = useState([]);
@@ -27,69 +42,54 @@ function BAFADokumente() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [newParentFolderId, setNewParentFolderId] = useState('');
+
   // Laden beim Start
   useEffect(() => {
-    if (!API_URL || !API_PASSWORD) {
-      setError('API nicht konfiguriert. Environment Variables in Netlify setzen!');
+    if (apiConfigError) {
+      setError(apiConfigError);
       return;
     }
     loadCustomers();
     loadConfigs();
-  }, []);
+  }, [apiConfigError]);
 
   // ==========================================
-  // API CALLS - CORS-FIX mit FormData
+  // API CALLS
+  // (Transport: FormData oder JSON wird im API-Client entschieden)
   // ==========================================
-
-  /**
-   * CORS-FIX: Google Apps Script benötigt FormData statt JSON
-   * KEIN Content-Type Header setzen - Browser setzt automatisch multipart/form-data
-   */
-  const apiCall = async (action, additionalData = {}) => {
-    const payload = {
-      action,
-      password: API_PASSWORD,
-      ...additionalData
-    };
-    
-    // FormData für Google Apps Script (vermeidet CORS-Preflight)
-    const formData = new FormData();
-    formData.append('data', JSON.stringify(payload));
-    
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      body: formData
-      // WICHTIG: KEIN Content-Type Header!
-    });
-    
-    return await response.json();
-  };
 
   const loadCustomers = async () => {
     try {
-      const data = await apiCall('listCustomers');
-      if (data.customers) {
-        setCustomers(data.customers);
-      }
+      if (!api) return [];
+      const data = await api.listCustomers();
+      const list = data.customers || [];
+      setCustomers(list);
+      return list;
     } catch (err) {
       console.error('Fehler beim Laden der Kunden:', err);
+      return [];
     }
   };
 
   const loadConfigs = async () => {
     try {
-      const data = await apiCall('listConfigs');
-      if (data.configs) {
-        setConfigs(data.configs);
-      }
+      if (!api) return [];
+      const data = await api.listConfigs();
+      const list = data.configs || [];
+      setConfigs(list);
+      return list;
     } catch (err) {
       console.error('Fehler beim Laden der Configs:', err);
+      return [];
     }
   };
 
   const loadCustomerDocuments = async (kundeId) => {
     try {
-      const data = await apiCall('listCustomerDocuments', { kundeId });
+      if (!api) return;
+      const data = await api.listCustomerDocuments(kundeId);
       if (data.documents) {
         setCustomerDocuments(data.documents);
       }
@@ -100,17 +100,15 @@ function BAFADokumente() {
 
   const uploadLogo = async (kundeId, logoBlob) => {
     try {
-      const data = await apiCall('uploadLogo', {
-        kundeId,
-        logoBlob
-      });
+      if (!api) throw new Error('API nicht konfiguriert');
+      const data = await api.uploadLogo(kundeId, logoBlob);
       
       if (data.statusCode === 200) {
         // Kunden neu laden um Logo-URL zu aktualisieren
-        await loadCustomers();
+        const refreshedCustomers = await loadCustomers();
         
         // Selektierten Kunden aktualisieren
-        const updatedCustomer = customers.find(c => c.kundeId === kundeId);
+        const updatedCustomer = refreshedCustomers.find(c => c.kundeId === kundeId);
         if (updatedCustomer) {
           updatedCustomer.logoUrl = data.logoUrl;
           setSelectedCustomer({...updatedCustomer});
@@ -138,6 +136,43 @@ function BAFADokumente() {
     
     if (customer) {
       await loadCustomerDocuments(kundeId);
+    }
+  };
+
+  const handleCreateCustomer = async (e) => {
+    e.preventDefault();
+
+    if (!newCompanyName.trim()) {
+      setError('Bitte Firmennamen eingeben');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      if (!api) throw new Error('API nicht konfiguriert');
+
+      const data = await api.createCustomer(
+        newCompanyName.trim(),
+        newParentFolderId.trim() || undefined
+      );
+
+      const created = data.customer;
+      await loadCustomers();
+
+      if (created?.kundeId) {
+        await handleSelectCustomer(created.kundeId);
+      }
+
+      setNewCompanyName('');
+      setNewParentFolderId('');
+      setResult({ message: `Kunde erstellt: ${created?.companyName || ''}` });
+    } catch (err) {
+      setError('Kunde erstellen fehlgeschlagen: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -185,11 +220,12 @@ function BAFADokumente() {
     setResult(null);
     
     try {
-      const data = await apiCall('processDocumentForCustomer', {
-        kundeId: selectedCustomer.kundeId,
-        configId: selectedConfig.id,
-        inputData: inputData.split('\n')
-      });
+      if (!api) throw new Error('API nicht konfiguriert');
+      const data = await api.processDocumentForCustomer(
+        selectedCustomer.kundeId,
+        selectedConfig.id,
+        inputData.split('\n')
+      );
       
       if (data.statusCode === 200) {
         setResult(data);
@@ -219,12 +255,13 @@ function BAFADokumente() {
     setResult(null);
     
     try {
-      const data = await apiCall('updateExistingDocument', {
-        googleDocId: selectedDocument.googleDocId,
-        configId: selectedDocument.configId,
-        inputData: inputData.split('\n'),
-        mode: 'append'
-      });
+      if (!api) throw new Error('API nicht konfiguriert');
+      const data = await api.updateExistingDocument(
+        selectedDocument.googleDocId,
+        selectedDocument.configId,
+        inputData.split('\n'),
+        'append'
+      );
       
       if (data.statusCode === 200) {
         setResult(data);
@@ -285,6 +322,40 @@ function BAFADokumente() {
         </select>
       </div>
 
+      {/* Kunde anlegen */}
+      <div style={styles.card}>
+        <h3>Neuen Kunden anlegen</h3>
+        <form onSubmit={handleCreateCustomer}>
+          <div style={styles.section}>
+            <label style={styles.label}>Firmenname:</label>
+            <input
+              style={styles.input}
+              value={newCompanyName}
+              onChange={(e) => setNewCompanyName(e.target.value)}
+              placeholder="z.B. Muster GmbH"
+            />
+          </div>
+
+          <div style={styles.section}>
+            <label style={styles.label}>Parent Folder ID (optional):</label>
+            <input
+              style={styles.input}
+              value={newParentFolderId}
+              onChange={(e) => setNewParentFolderId(e.target.value)}
+              placeholder="Google Drive Folder ID"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={!newCompanyName.trim() || loading}
+            style={newCompanyName.trim() && !loading ? styles.button : styles.buttonDisabled}
+          >
+            {loading ? 'Wird erstellt...' : 'Kunden erstellen'}
+          </button>
+        </form>
+      </div>
+
       {/* Kunde ausgewählt */}
       {selectedCustomer && (
         <>
@@ -337,6 +408,33 @@ function BAFADokumente() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Batch: Alle Dokumente erstellen */}
+          <div style={styles.card}>
+            <button
+              onClick={async () => {
+                if (!selectedCustomer) return;
+                setLoading(true);
+                setError(null);
+                setResult(null);
+
+                try {
+                  if (!api) throw new Error('API nicht konfiguriert');
+                  const data = await api.createAllDocumentsForCustomer(selectedCustomer.kundeId);
+                  setResult(data);
+                  await loadCustomerDocuments(selectedCustomer.kundeId);
+                } catch (err) {
+                  setError('Batch-Erstellung fehlgeschlagen: ' + err.message);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              style={!loading ? styles.button : styles.buttonDisabled}
+            >
+              {loading ? 'Wird ausgeführt...' : 'Alle Dokumente für den Kunden erstellen'}
+            </button>
           </div>
 
           {/* Modus-Auswahl */}
@@ -723,6 +821,14 @@ const styles = {
     borderRadius: '8px',
     backgroundColor: 'white',
     cursor: 'pointer'
+  },
+  input: {
+    width: '100%',
+    padding: '12px',
+    fontSize: '15px',
+    border: '2px solid #e0e0e0',
+    borderRadius: '8px',
+    backgroundColor: 'white'
   },
   textarea: {
     width: '100%',
