@@ -299,15 +299,19 @@ function BAFADokumente() {
   // RENDER
   // ==========================================
 
-  if (!API_URL || !API_PASSWORD) {
+  if (apiConfigError) {
     return (
       <div style={styles.container}>
         <div style={styles.configError}>
           <h3>⚠️ Konfiguration fehlt</h3>
-          <p>Bitte Environment Variables in Netlify setzen:</p>
-          <ul>
-            <li><code>VITE_API_URL</code></li>
-            <li><code>VITE_API_PASSWORD</code></li>
+          <p>{apiConfigError}</p>
+          <p style={{ marginTop: 8, marginBottom: 8 }}>Empfohlen (sicher, ohne Passwort im Browser):</p>
+          <ul style={{ marginTop: 0 }}>
+            <li><code>VITE_API_URL=/.netlify/functions/bafa</code></li>
+            <li><code>VITE_API_TRANSPORT=json</code></li>
+            <li>
+              Netlify (server-side): <code>BAFA_API_URL</code> und <code>BAFA_API_PASSWORD</code>
+            </li>
           </ul>
         </div>
       </div>
