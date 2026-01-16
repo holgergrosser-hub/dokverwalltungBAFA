@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createBafaApi } from './api/bafaApi';
+import Firmendaten from './Firmendaten';
 
 /**
  * BAFA DOKUMENTE - HAUPTKOMPONENTE
@@ -33,6 +34,7 @@ function BAFADokumente() {
   const [selectedConfig, setSelectedConfig] = useState(null);
   
   const [mode, setMode] = useState('overview'); // 'overview', 'create', 'edit'
+  const [activeTab, setActiveTab] = useState('dokumente'); // 'dokumente' | 'firmendaten'
   const [selectedDocument, setSelectedDocument] = useState(null);
   
   const [inputData, setInputData] = useState('');
@@ -130,6 +132,7 @@ function BAFADokumente() {
   const handleSelectCustomer = async (kundeId) => {
     const customer = customers.find(c => c.kundeId === kundeId);
     setSelectedCustomer(customer);
+    setActiveTab('dokumente');
     setMode('overview');
     setResult(null);
     setError(null);
@@ -431,251 +434,286 @@ function BAFADokumente() {
             </div>
           </div>
 
-          {/* Batch: Alle Dokumente erstellen */}
+          {/* Tabs */}
           <div style={styles.card}>
-            <button
-              onClick={async () => {
-                if (!selectedCustomer) return;
-                setLoading(true);
-                setError(null);
-                setResult(null);
-
-                try {
-                  if (!api) throw new Error('API nicht konfiguriert');
-                  const data = await api.createAllDocumentsForCustomer(selectedCustomer.kundeId);
-                  setResult(data);
-                  await loadCustomerDocuments(selectedCustomer.kundeId);
-                } catch (err) {
-                  setError('Batch-Erstellung fehlgeschlagen: ' + err.message);
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              disabled={loading}
-              style={!loading ? styles.button : styles.buttonDisabled}
-            >
-              {loading ? 'Wird ausgeführt...' : 'Alle Dokumente für den Kunden erstellen'}
-            </button>
-          </div>
-
-          {/* Modus-Auswahl */}
-          <div style={styles.card}>
-            <div style={styles.modeButtons}>
+            <div className="tabs">
               <button
-                onClick={() => setMode('overview')}
-                style={mode === 'overview' ? styles.modeButtonActive : styles.modeButton}
+                type="button"
+                className={activeTab === 'dokumente' ? 'active' : ''}
+                onClick={() => setActiveTab('dokumente')}
               >
-                📊 Übersicht
+                Dokumente
               </button>
               <button
-                onClick={() => { setMode('create'); setSelectedConfig(null); setInputData(''); }}
-                style={mode === 'create' ? styles.modeButtonActive : styles.modeButton}
+                type="button"
+                className={activeTab === 'firmendaten' ? 'active' : ''}
+                onClick={() => setActiveTab('firmendaten')}
               >
-                ➕ Neues Dokument
+                Firmendaten
               </button>
             </div>
           </div>
 
-          {/* ÜBERSICHT-MODUS */}
-          {mode === 'overview' && (
-            <div style={styles.card}>
-              <h3>📋 Dokument-Übersicht</h3>
-              
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>Dokumenttyp</th>
-                    <th style={styles.th}>Status</th>
-                    <th style={styles.th}>Erstellt</th>
-                    <th style={styles.th}>Aktionen</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {configs.map(config => {
-                    const doc = customerDocuments.find(d => d.configId === config.id);
-                    return (
-                      <tr key={config.id}>
-                        <td style={styles.td}>{config.name}</td>
-                        <td style={styles.td}>
-                          {doc ? (
-                            <span style={styles.statusExists}>✅ Vorhanden</span>
-                          ) : (
-                            <span style={styles.statusMissing}>❌ Fehlt</span>
-                          )}
-                        </td>
-                        <td style={styles.td}>
-                          {doc ? new Date(doc.createdAt).toLocaleDateString('de-DE') : '-'}
-                        </td>
-                        <td style={styles.td}>
-                          {doc ? (
-                            <div style={styles.actionButtons}>
-                              <button
-                                onClick={() => window.open(`https://docs.google.com/document/d/${doc.googleDocId}/edit`, '_blank')}
-                                style={styles.buttonTiny}
-                              >
-                                Öffnen
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedDocument(doc);
-                                  setSelectedConfig(config);
-                                  setMode('edit');
-                                  setInputData('');
-                                }}
-                                style={styles.buttonTiny}
-                              >
-                                Bearbeiten
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setSelectedConfig(config);
-                                setMode('create');
-                                setInputData('');
-                              }}
-                              style={styles.buttonTiny}
-                            >
-                              Erstellen
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {activeTab === 'firmendaten' && <Firmendaten kunde={selectedCustomer} api={api} />}
 
-          {/* ERSTELLEN-MODUS */}
-          {mode === 'create' && (
-            <div style={styles.card}>
-              <h3>➕ Neues Dokument erstellen</h3>
-              
-              <form onSubmit={handleCreateDocument}>
-                <div style={styles.section}>
-                  <label style={styles.label}>Dokumenttyp:</label>
-                  <select
-                    style={styles.select}
-                    value={selectedConfig?.id || ''}
-                    onChange={(e) => {
-                      const config = configs.find(c => c.id === e.target.value);
-                      setSelectedConfig(config);
-                    }}
+          {activeTab === 'dokumente' && (
+            <>
+              {/* Batch: Alle Dokumente erstellen */}
+              <div style={styles.card}>
+                <button
+                  onClick={async () => {
+                    if (!selectedCustomer) return;
+                    setLoading(true);
+                    setError(null);
+                    setResult(null);
+
+                    try {
+                      if (!api) throw new Error('API nicht konfiguriert');
+                      const data = await api.createAllDocumentsForCustomer(selectedCustomer.kundeId);
+                      setResult(data);
+                      await loadCustomerDocuments(selectedCustomer.kundeId);
+                    } catch (err) {
+                      setError('Batch-Erstellung fehlgeschlagen: ' + err.message);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading}
+                  style={!loading ? styles.button : styles.buttonDisabled}
+                >
+                  {loading ? 'Wird ausgeführt...' : 'Alle Dokumente für den Kunden erstellen'}
+                </button>
+              </div>
+
+              {/* Modus-Auswahl */}
+              <div style={styles.card}>
+                <div style={styles.modeButtons}>
+                  <button
+                    onClick={() => setMode('overview')}
+                    style={mode === 'overview' ? styles.modeButtonActive : styles.modeButton}
                   >
-                    <option value="">-- Typ wählen --</option>
-                    {configs.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                  {selectedConfig && (
-                    <p style={styles.description}>{selectedConfig.description}</p>
+                    📊 Übersicht
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMode('create');
+                      setSelectedConfig(null);
+                      setInputData('');
+                    }}
+                    style={mode === 'create' ? styles.modeButtonActive : styles.modeButton}
+                  >
+                    ➕ Neues Dokument
+                  </button>
+                </div>
+              </div>
+
+              {/* ÜBERSICHT-MODUS */}
+              {mode === 'overview' && (
+                <div style={styles.card}>
+                  <h3>📋 Dokument-Übersicht</h3>
+
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={styles.th}>Dokumenttyp</th>
+                        <th style={styles.th}>Status</th>
+                        <th style={styles.th}>Erstellt</th>
+                        <th style={styles.th}>Aktionen</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {configs.map((config) => {
+                        const doc = customerDocuments.find((d) => d.configId === config.id);
+                        return (
+                          <tr key={config.id}>
+                            <td style={styles.td}>{config.name}</td>
+                            <td style={styles.td}>
+                              {doc ? (
+                                <span style={styles.statusExists}>✅ Vorhanden</span>
+                              ) : (
+                                <span style={styles.statusMissing}>❌ Fehlt</span>
+                              )}
+                            </td>
+                            <td style={styles.td}>
+                              {doc ? new Date(doc.createdAt).toLocaleDateString('de-DE') : '-'}
+                            </td>
+                            <td style={styles.td}>
+                              {doc ? (
+                                <div style={styles.actionButtons}>
+                                  <button
+                                    onClick={() =>
+                                      window.open(
+                                        `https://docs.google.com/document/d/${doc.googleDocId}/edit`,
+                                        '_blank'
+                                      )
+                                    }
+                                    style={styles.buttonTiny}
+                                  >
+                                    Öffnen
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedDocument(doc);
+                                      setSelectedConfig(config);
+                                      setMode('edit');
+                                      setInputData('');
+                                    }}
+                                    style={styles.buttonTiny}
+                                  >
+                                    Bearbeiten
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setSelectedConfig(config);
+                                    setMode('create');
+                                    setInputData('');
+                                  }}
+                                  style={styles.buttonTiny}
+                                >
+                                  Erstellen
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* ERSTELLEN-MODUS */}
+              {mode === 'create' && (
+                <div style={styles.card}>
+                  <h3>➕ Neues Dokument erstellen</h3>
+
+                  <form onSubmit={handleCreateDocument}>
+                    <div style={styles.section}>
+                      <label style={styles.label}>Dokumenttyp:</label>
+                      <select
+                        style={styles.select}
+                        value={selectedConfig?.id || ''}
+                        onChange={(e) => {
+                          const config = configs.find((c) => c.id === e.target.value);
+                          setSelectedConfig(config);
+                        }}
+                      >
+                        <option value="">-- Typ wählen --</option>
+                        {configs.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedConfig && <p style={styles.description}>{selectedConfig.description}</p>}
+                    </div>
+
+                    {selectedConfig && (
+                      <div style={styles.section}>
+                        <label style={styles.label}>
+                          {selectedConfig.inputLabel || 'Einträge'} (ein Eintrag pro Zeile):
+                        </label>
+                        <textarea
+                          style={styles.textarea}
+                          rows="12"
+                          placeholder={selectedConfig.inputPlaceholder || 'Eintrag 1\nEintrag 2\n...'}
+                          value={inputData}
+                          onChange={(e) => setInputData(e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={!selectedConfig || !inputData || loading}
+                      style={
+                        selectedConfig && inputData && !loading ? styles.button : styles.buttonDisabled
+                      }
+                    >
+                      {loading ? '⏳ Wird erstellt...' : '🚀 Dokument erstellen'}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* BEARBEITEN-MODUS */}
+              {mode === 'edit' && selectedDocument && (
+                <div style={styles.card}>
+                  <h3>✏️ Dokument bearbeiten</h3>
+                  <p style={styles.editInfo}>
+                    Dokument: <strong>{selectedDocument.documentName}</strong>
+                    <br />
+                    Erstellt: {new Date(selectedDocument.createdAt).toLocaleDateString('de-DE')}
+                    <br />
+                    <a
+                      href={`https://docs.google.com/document/d/${selectedDocument.googleDocId}/edit`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={styles.link}
+                    >
+                      📄 In Google Docs öffnen
+                    </a>
+                  </p>
+
+                  <form onSubmit={handleUpdateDocument}>
+                    <div style={styles.section}>
+                      <label style={styles.label}>Neue Einträge hinzufügen (ein Eintrag pro Zeile):</label>
+                      <textarea
+                        style={styles.textarea}
+                        rows="10"
+                        placeholder="Neue Einträge hier eingeben..."
+                        value={inputData}
+                        onChange={(e) => setInputData(e.target.value)}
+                      />
+                      <p style={styles.hint}>Die neuen Einträge werden zur bestehenden Tabelle hinzugefügt.</p>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={!inputData || loading}
+                      style={inputData && !loading ? styles.button : styles.buttonDisabled}
+                    >
+                      {loading ? '⏳ Wird aktualisiert...' : '💾 Einträge hinzufügen'}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Erfolg */}
+              {result && (
+                <div style={styles.success}>
+                  <h3>✅ Erfolg!</h3>
+                  <p>{result.message}</p>
+                  {result.docUrl && (
+                    <a
+                      href={result.docUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={styles.linkButton}
+                    >
+                      📄 Dokument öffnen
+                    </a>
                   )}
                 </div>
-
-                {selectedConfig && (
-                  <div style={styles.section}>
-                    <label style={styles.label}>
-                      {selectedConfig.inputLabel || 'Einträge'} (ein Eintrag pro Zeile):
-                    </label>
-                    <textarea
-                      style={styles.textarea}
-                      rows="12"
-                      placeholder={selectedConfig.inputPlaceholder || 'Eintrag 1\nEintrag 2\n...'}
-                      value={inputData}
-                      onChange={(e) => setInputData(e.target.value)}
-                    />
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={!selectedConfig || !inputData || loading}
-                  style={selectedConfig && inputData && !loading ? styles.button : styles.buttonDisabled}
-                >
-                  {loading ? '⏳ Wird erstellt...' : '🚀 Dokument erstellen'}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* BEARBEITEN-MODUS */}
-          {mode === 'edit' && selectedDocument && (
-            <div style={styles.card}>
-              <h3>✏️ Dokument bearbeiten</h3>
-              <p style={styles.editInfo}>
-                Dokument: <strong>{selectedDocument.documentName}</strong><br />
-                Erstellt: {new Date(selectedDocument.createdAt).toLocaleDateString('de-DE')}<br />
-                <a
-                  href={`https://docs.google.com/document/d/${selectedDocument.googleDocId}/edit`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={styles.link}
-                >
-                  📄 In Google Docs öffnen
-                </a>
-              </p>
-
-              <form onSubmit={handleUpdateDocument}>
-                <div style={styles.section}>
-                  <label style={styles.label}>
-                    Neue Einträge hinzufügen (ein Eintrag pro Zeile):
-                  </label>
-                  <textarea
-                    style={styles.textarea}
-                    rows="10"
-                    placeholder="Neue Einträge hier eingeben..."
-                    value={inputData}
-                    onChange={(e) => setInputData(e.target.value)}
-                  />
-                  <p style={styles.hint}>
-                    Die neuen Einträge werden zur bestehenden Tabelle hinzugefügt.
-                  </p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={!inputData || loading}
-                  style={inputData && !loading ? styles.button : styles.buttonDisabled}
-                >
-                  {loading ? '⏳ Wird aktualisiert...' : '💾 Einträge hinzufügen'}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* Erfolg */}
-          {result && (
-            <div style={styles.success}>
-              <h3>✅ Erfolg!</h3>
-              <p>{result.message}</p>
-              {result.docUrl && (
-                <a
-                  href={result.docUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={styles.linkButton}
-                >
-                  📄 Dokument öffnen
-                </a>
               )}
-            </div>
-          )}
 
-          {/* Fehler */}
-          {error && (
-            <div style={styles.error}>
-              <h3>❌ Fehler</h3>
-              <p>{error}</p>
-            </div>
+              {/* Fehler */}
+              {error && (
+                <div style={styles.error}>
+                  <h3>❌ Fehler</h3>
+                  <p>{error}</p>
+                </div>
+              )}
+            </>
           )}
         </>
       )}
 
       {/* Footer */}
       <div style={styles.footer}>
-        <p>BAFA Dokumente System v2.1 (CORS-Fix)</p>
+        <p>BAFA Dokumente System v2.3 (Firmendaten)</p>
       </div>
     </div>
   );
