@@ -47,6 +47,8 @@ Für Google-Doc-Templates (insb. **Managementbewertung** und **Auditbericht**) i
 
 - `docs/PLATZHALTER.md`
 
+Hinweis: Wenn nach der Erstellung noch `{{...}}` Platzhalter im Dokument übrig sind, fragt das Frontend, ob sie entfernt werden sollen oder ob Eingaben nachgetragen werden.
+
 ## Deploy-Checkliste (Reminder)
 
 Wenn du **Google-Doc-Templates** oder **Platzhalter** änderst (z.B. Managementbewertung/Auditbericht):
