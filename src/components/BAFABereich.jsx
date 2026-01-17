@@ -232,6 +232,35 @@ function BAFABereich({ kunde, api: apiProp }) {
         window.open(docUrl, '_blank');
       }
 
+      // If unresolved placeholders remain, ask before removing.
+      const unresolved = Array.isArray(result?.unresolvedTokens) ? result.unresolvedTokens : [];
+      if (unresolved.length > 0) {
+        const maxShow = 20;
+        const preview = unresolved.slice(0, maxShow).join('\n');
+        const more = unresolved.length > maxShow ? `\n… (+${unresolved.length - maxShow} weitere)` : '';
+
+        const ok = window.confirm(
+          `Im Dokument sind noch Platzhalter enthalten:\n\n${preview}${more}\n\nOK = Platzhalter entfernen\nAbbrechen = Eingaben nachtragen (Platzhalter bleiben im Dokument)`
+        );
+
+        if (ok) {
+          const docId = result?.googleDocId || selectedDocument?.googleDocId;
+          if (docId) {
+            await api.updateExistingDocument(
+              docId,
+              config.id,
+              {
+                options: {
+                  cleanupOnly: true,
+                  unresolvedTokensPolicy: 'remove'
+                }
+              },
+              'cleanupOnly'
+            );
+          }
+        }
+      }
+
       setSuccess(
         formMode === 'update'
           ? 'Dokument wurde aktualisiert.'

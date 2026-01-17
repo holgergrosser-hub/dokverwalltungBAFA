@@ -368,7 +368,39 @@ function coerceStructuredInput_(inputData) {
   const placeholders = inputData.placeholders && typeof inputData.placeholders === 'object' ? inputData.placeholders : {};
   const tables = inputData.tables && typeof inputData.tables === 'object' ? inputData.tables : {};
 
-  return { placeholders: placeholders, tables: tables };
+  const options = inputData.options && typeof inputData.options === 'object' ? inputData.options : {};
+
+  return { placeholders: placeholders, tables: tables, options: options };
+}
+
+function extractUnresolvedTokensFromContainer_(container) {
+  if (!container || typeof container.getText !== 'function') return [];
+  var text = '';
+  try {
+    text = String(container.getText() || '');
+  } catch (e) {
+    text = '';
+  }
+  if (!text) return [];
+  var m = text.match(/\{\{[^}]+\}\}/g);
+  if (!m || !m.length) return [];
+  var uniq = {};
+  m.forEach(function (t) {
+    uniq[String(t)] = true;
+  });
+  return Object.keys(uniq).sort();
+}
+
+function collectUnresolvedTokens_(body, header, footer) {
+  var all = [];
+  all = all.concat(extractUnresolvedTokensFromContainer_(body));
+  all = all.concat(extractUnresolvedTokensFromContainer_(header));
+  all = all.concat(extractUnresolvedTokensFromContainer_(footer));
+  var uniq = {};
+  all.forEach(function (t) {
+    uniq[String(t)] = true;
+  });
+  return Object.keys(uniq).sort();
 }
 
 function getCustomerFolderIdForDocs_(kundeId) {
@@ -582,14 +614,26 @@ function applyTablesToBody_(body, tables, mode) {
   });
 }
 
-function applyDocReplacements_(docId, placeholders, tables, customer, mode) {
+function applyDocReplacements_(docId, placeholders, tables, customer, mode, options) {
   const doc = DocumentApp.openById(docId);
   const body = doc.getBody();
 
-  // Optional: insert logo image where template has LOGO tokens
-  insertLogoIfPresent_(body, customer);
   const header = doc.getHeader();
   const footer = doc.getFooter();
+
+  const opts = options && typeof options === 'object' ? options : {};
+  const cleanupOnly = !!opts.cleanupOnly || String(mode || '').toLowerCase() === 'cleanuponly';
+
+  if (cleanupOnly) {
+    cleanupRemainingTokens_(body);
+    if (header) cleanupRemainingTokens_(header);
+    if (footer) cleanupRemainingTokens_(footer);
+    doc.saveAndClose();
+    return { cleanupOnly: true, unresolvedTokens: [] };
+  }
+
+  // Optional: insert logo image where template has LOGO tokens
+  insertLogoIfPresent_(body, customer);
   if (header) insertLogoIfPresent_(header, customer);
   if (footer) insertLogoIfPresent_(footer, customer);
 
@@ -601,12 +645,28 @@ function applyDocReplacements_(docId, placeholders, tables, customer, mode) {
   // Tables are body-only (safe default)
   applyTablesToBody_(body, tables, mode);
 
-  // Final cleanup: remove any remaining {{...}} tokens
-  cleanupRemainingTokens_(body);
-  if (header) cleanupRemainingTokens_(header);
-  if (footer) cleanupRemainingTokens_(footer);
+  // Detect unresolved tokens and decide what to do with them.
+  // Default is KEEP (so the UI can ask the user before removing).
+  var unresolvedTokens = collectUnresolvedTokens_(body, header, footer);
+  var policy = String(opts.unresolvedTokensPolicy || 'keep').toLowerCase();
+
+  if (unresolvedTokens.length > 0) {
+    if (policy === 'remove') {
+      cleanupRemainingTokens_(body);
+      if (header) cleanupRemainingTokens_(header);
+      if (footer) cleanupRemainingTokens_(footer);
+      unresolvedTokens = collectUnresolvedTokens_(body, header, footer);
+    } else if (policy === 'error') {
+      throw new Error('Unresolved placeholders: ' + unresolvedTokens.join(', '));
+    }
+  }
 
   doc.saveAndClose();
+  return {
+    cleanupOnly: false,
+    unresolvedTokensPolicy: policy,
+    unresolvedTokens: unresolvedTokens
+  };
 }
 
 function updateBafaExistingDocument(googleDocId, configId, inputData, mode) {
@@ -637,7 +697,14 @@ function updateBafaExistingDocument(googleDocId, configId, inputData, mode) {
   }
 
   const ctx = kundeId ? mergeStandardPlaceholders_(kundeId, structured) : { customer: null };
-  applyDocReplacements_(googleDocId, structured.placeholders, structured.tables, ctx.customer, mode || 'append');
+  const meta = applyDocReplacements_(
+    googleDocId,
+    structured.placeholders,
+    structured.tables,
+    ctx.customer,
+    mode || 'append',
+    structured.options
+  );
 
   // Touch tracking row if available
   try {
@@ -654,7 +721,9 @@ function updateBafaExistingDocument(googleDocId, configId, inputData, mode) {
     googleDocId: googleDocId,
     docUrl: 'https://docs.google.com/document/d/' + googleDocId + '/edit',
     updatedAt: new Date().toISOString(),
-    message: 'Dokument aktualisiert: ' + cfg.name
+    message: 'Dokument aktualisiert: ' + cfg.name,
+    unresolvedTokens: meta && meta.unresolvedTokens ? meta.unresolvedTokens : [],
+    unresolvedTokensPolicy: meta && meta.unresolvedTokensPolicy ? meta.unresolvedTokensPolicy : 'keep'
   };
 }
 
@@ -686,7 +755,14 @@ function processBafaDocumentForCustomer(kundeId, configId, inputData) {
   const url = copied.getUrl();
 
   if (cfg.templateType === 'doc') {
-    applyDocReplacements_(copiedId, structured.placeholders, structured.tables, ctx.customer, 'replace');
+    var meta = applyDocReplacements_(
+      copiedId,
+      structured.placeholders,
+      structured.tables,
+      ctx.customer,
+      'replace',
+      structured.options
+    );
   }
 
   // Track document so it can be listed/edited later
@@ -705,6 +781,8 @@ function processBafaDocumentForCustomer(kundeId, configId, inputData) {
     documentName: docName,
     docUrl: url,
     createdAt: new Date().toISOString(),
-    message: 'Dokument erstellt: ' + cfg.name
+    message: 'Dokument erstellt: ' + cfg.name,
+    unresolvedTokens: meta && meta.unresolvedTokens ? meta.unresolvedTokens : [],
+    unresolvedTokensPolicy: meta && meta.unresolvedTokensPolicy ? meta.unresolvedTokensPolicy : 'keep'
   };
 }

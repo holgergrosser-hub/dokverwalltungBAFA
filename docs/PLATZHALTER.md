@@ -6,7 +6,10 @@ Diese Datei ist die **Checkliste**, bevor du ein Google-Doc-Template baust/ände
 
 - Platzhalter haben das Format: `{{KEY}}`
 - **Groß/Klein-/Schreibvarianten** werden serverseitig toleriert (z.B. `{{FIRMENNAME}}`, `{{firmenname}}`, `{{Firmenname}}`).
-- **Nicht ersetzte Tokens** wie `{{IRGENDWAS}}` werden am Ende serverseitig entfernt (Cleanup).
+- **Nicht ersetzte Tokens** wie `{{IRGENDWAS}}` werden **standardmäßig NICHT automatisch entfernt**.
+	- Stattdessen meldet das Backend die noch vorhandenen Tokens zurück und das Frontend fragt nach:
+		- **Entfernen** (Cleanup) oder
+		- **Eingabe nachtragen** (Platzhalter bleiben sichtbar im Doc).
 
 ## Standard-Platzhalter (immer verfügbar, aus Firmendaten/Kunde)
 
