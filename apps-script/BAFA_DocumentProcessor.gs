@@ -237,6 +237,18 @@ function mergeStandardPlaceholders_(kundeId, structured) {
   var webpage = pickFirst_(firmendaten, ['webpage', 'WEBPAGE', 'homepage', 'HOMEPAGE', 'website', 'WEBSITE', 'webseite', 'WEBSEITE']);
   addPlaceholderWithVariants_(placeholders, 'Webpage', webpage);
 
+  // Additional Firmendaten placeholders (optional, but commonly needed in templates)
+  // These are merged server-side so templates can use them in ANY document type.
+  if (firmendaten) {
+    addPlaceholderWithVariants_(placeholders, 'ZIELGRUPPE', pickFirst_(firmendaten, ['zielgruppe', 'ZIELGRUPPE']));
+    addPlaceholderWithVariants_(placeholders, 'ZIELGEBIET', pickFirst_(firmendaten, ['zielgebiet', 'ZIELGEBIET']));
+    addPlaceholderWithVariants_(placeholders, 'GESCHAEFTSFUEHRER', pickFirst_(firmendaten, ['geschaeftsfuehrer', 'GESCHAEFTSFUEHRER']));
+    addPlaceholderWithVariants_(placeholders, 'QMB', pickFirst_(firmendaten, ['qmb', 'QMB']));
+    addPlaceholderWithVariants_(placeholders, 'UNTERNEHMENSPOLITIK', pickFirst_(firmendaten, ['unternehmenspolitik', 'UNTERNEHMENSPOLITIK']));
+    addPlaceholderWithVariants_(placeholders, 'QUALITAETSPOLITIK', pickFirst_(firmendaten, ['qualitaetspolitik', 'QUALITAETSPOLITIK']));
+    addPlaceholderWithVariants_(placeholders, 'DATENSICHERUNG', pickFirst_(firmendaten, ['datensicherung', 'DATENSICHERUNG']));
+  }
+
   // Logo placeholder variants (template often uses LOGO_URL)
   var logo = '';
   if (customer) {

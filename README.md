@@ -41,6 +41,12 @@ Netlify Dashboard → Environment Variables:
 
 Das WebApp-Routing liegt als Referenz in `apps-script/Code.js`.
 
+## Platzhalter (Reminder)
+
+Für Google-Doc-Templates (insb. **Managementbewertung** und **Auditbericht**) ist die Platzhalter-Checkliste hier hinterlegt:
+
+- `docs/PLATZHALTER.md`
+
 Minimaler Deploy-Flow:
 
 1. Google Drive → Neues Apps Script Projekt
