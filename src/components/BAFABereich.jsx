@@ -19,6 +19,12 @@ function parseLines(rawText) {
     .filter(Boolean);
 }
 
+function stringifyLines(lines) {
+  if (!lines) return '';
+  if (Array.isArray(lines)) return lines.map((x) => String(x ?? '')).join('\n');
+  return String(lines);
+}
+
 function formatTodayForDateInput() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -61,6 +67,8 @@ function BAFABereich({ kunde, api: apiProp, firmendatenReloadKey = 0 }) {
   const [formMode, setFormMode] = useState('create'); // create | update
   const [selectedDocument, setSelectedDocument] = useState(null);
 
+  const [loadingSavedInputs, setLoadingSavedInputs] = useState(false);
+
   const configKeyById = useMemo(() => {
     const map = {};
     Object.keys(BAFA_CONFIGS).forEach((k) => {
@@ -82,7 +90,71 @@ function BAFABereich({ kunde, api: apiProp, firmendatenReloadKey = 0 }) {
     setCustomerDocuments([]);
     setSelectedDocument(null);
     setFormMode('create');
+    setLoadingSavedInputs(false);
   }, [kunde?.kundeId]);
+
+  const loadSavedInputs = async ({ kundeId, configId, googleDocId }) => {
+    if (!kundeId || !configId) return;
+    setLoadingSavedInputs(true);
+    try {
+      const res = await api.getSavedInputData(kundeId, configId, googleDocId);
+      const inputData =
+        res?.inputData ??
+        res?.data?.inputData ??
+        (res?.success && typeof res?.inputData === 'object' ? res.inputData : null);
+
+      if (!inputData) return;
+
+      const placeholders = inputData.placeholders && typeof inputData.placeholders === 'object' ? inputData.placeholders : {};
+      const tables = inputData.tables && typeof inputData.tables === 'object' ? inputData.tables : {};
+
+      // Prefill only if user hasn't typed yet.
+      setPlaceholderData((prev) => {
+        if (prev && Object.keys(prev).length) return prev;
+        return { ...placeholders };
+      });
+      setTableData((prev) => {
+        if (prev && Object.keys(prev).length) return prev;
+        const next = {};
+        Object.keys(tables).forEach((name) => {
+          next[name] = stringifyLines(tables[name]);
+        });
+        return next;
+      });
+    } catch {
+      // saved inputs are best-effort; ignore errors
+    } finally {
+      setLoadingSavedInputs(false);
+    }
+  };
+
+  // When switching into update mode, load saved inputs for this document.
+  useEffect(() => {
+    if (formMode !== 'update') return;
+    if (!kunde?.kundeId) return;
+    if (!config?.id) return;
+    if (!selectedDocument?.googleDocId) return;
+    loadSavedInputs({
+      kundeId: kunde.kundeId,
+      configId: config.id,
+      googleDocId: selectedDocument.googleDocId
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formMode, selectedDocument?.googleDocId, config?.id, kunde?.kundeId]);
+
+  // For create-mode, try loading latest saved inputs for this customer+config.
+  useEffect(() => {
+    if (formMode !== 'create') return;
+    if (!kunde?.kundeId) return;
+    if (!config?.id) return;
+    if (!config.placeholders?.length && !config.tables?.length) return;
+    loadSavedInputs({
+      kundeId: kunde.kundeId,
+      configId: config.id,
+      googleDocId: ''
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formMode, config?.id, kunde?.kundeId]);
 
   const loadCustomerDocuments = async () => {
     if (!kunde?.kundeId) return;
@@ -307,6 +379,13 @@ function BAFABereich({ kunde, api: apiProp, firmendatenReloadKey = 0 }) {
     }
   };
 
+  const missingRequiredFields = useMemo(() => {
+    if (!config) return [];
+    return (config.placeholders || [])
+      .filter((field) => field.required && !String(placeholderData[field.key] || '').trim())
+      .map((field) => field.label);
+  }, [config, placeholderData]);
+
   if (!kunde?.kundeId) {
     return (
       <div className="bereich">
@@ -471,6 +550,18 @@ function BAFABereich({ kunde, api: apiProp, firmendatenReloadKey = 0 }) {
 
           {loadingFirmendaten && (
             <div className="info-box">Firmendaten werden geladen (Auto-Fill)…</div>
+          )}
+
+          {loadingSavedInputs && (
+            <div className="info-box">Gespeicherte Eingaben werden geladen…</div>
+          )}
+
+          {missingRequiredFields.length > 0 && (
+            <div className="info-box warning">
+              <p>
+                <strong>Fehlende Pflichtfelder:</strong> {missingRequiredFields.join(', ')}
+              </p>
+            </div>
           )}
 
           {buildTemplateUrl(config) && (

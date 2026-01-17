@@ -101,6 +101,8 @@ export function createBafaApi({ apiUrl, apiPassword, transport } = {}) {
       base('processDocumentForCustomer', { kundeId, configId, inputData }),
     updateExistingDocument: (googleDocId, configId, inputData, mode = 'append') =>
       base('updateExistingDocument', { googleDocId, configId, inputData, mode }),
+    getSavedInputData: (kundeId, configId, googleDocId) =>
+      base('getSavedInputData', { kundeId, configId, googleDocId }),
     createAllDocumentsForCustomer: (kundeId) => base('createAllDocumentsForCustomer', { kundeId }),
 
     uploadLogo: (kundeId, logoBlob) => base('uploadLogo', { kundeId, logoBlob }),

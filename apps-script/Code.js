@@ -135,6 +135,9 @@ function doPost(e) {
       case 'updateExistingDocument':
         return handleUpdateExistingDocument(requestData, headers);
 
+        case 'getSavedInputData':
+          return handleGetSavedInputData(requestData, headers);
+
       case 'createAllDocumentsForCustomer':
         return handleCreateAllDocuments(requestData, headers);
 
@@ -161,6 +164,31 @@ function doPost(e) {
       error: 'Internal Server Error',
       message: error.message
     });
+  }
+}
+
+// ==========================================
+// HANDLER: EINGABEN (InputData Storage)
+// ==========================================
+
+function handleGetSavedInputData(data, headers) {
+  try {
+    const { kundeId, configId, googleDocId } = data;
+    if (!kundeId) return createResponse(400, { error: 'Missing kundeId' }, headers);
+    if (!configId) return createResponse(400, { error: 'Missing configId' }, headers);
+
+    // Implemented in BAFA_DocumentProcessor.gs
+    const result = getSavedInputData(kundeId, configId, googleDocId);
+    return createResponse(200, result, headers);
+  } catch (error) {
+    return createResponse(
+      500,
+      {
+        error: 'Failed to load saved input data',
+        message: error.message
+      },
+      headers
+    );
   }
 }
 

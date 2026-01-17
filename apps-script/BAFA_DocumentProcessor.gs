@@ -264,6 +264,7 @@ function mergeStandardPlaceholders_(kundeId, structured) {
 }
 
 const BAFA_DOKUMENTE_SHEET_NAME_ = 'DOKUMENTE';
+const BAFA_EINGABEN_SHEET_NAME_ = 'EINGABEN';
 
 function getSpreadsheetForDocs_() {
   // Reuse existing helper from Firmendaten.gs if present.
@@ -295,6 +296,213 @@ function getDocumentsSheetForTracking_() {
 
 function nextDocId_() {
   return 'doc_' + new Date().getTime() + '_' + Math.floor(Math.random() * 1000000);
+}
+
+function getInputsSheetForTracking_() {
+  const ss = getSpreadsheetForDocs_();
+  let sheet = ss.getSheetByName(BAFA_EINGABEN_SHEET_NAME_);
+  if (!sheet) {
+    sheet = ss.insertSheet(BAFA_EINGABEN_SHEET_NAME_);
+    sheet.appendRow([
+      'inputId',
+      'kundeId',
+      'configId',
+      'googleDocId',
+      'inputJson',
+      'createdAt',
+      'updatedAt'
+    ]);
+  }
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow([
+      'inputId',
+      'kundeId',
+      'configId',
+      'googleDocId',
+      'inputJson',
+      'createdAt',
+      'updatedAt'
+    ]);
+  }
+  return sheet;
+}
+
+function nextInputId_() {
+  return 'in_' + new Date().getTime() + '_' + Math.floor(Math.random() * 1000000);
+}
+
+function safeStringifyInput_(structured) {
+  var obj = structured && typeof structured === 'object' ? structured : {};
+  var json = '';
+  try {
+    json = JSON.stringify(obj);
+  } catch (e) {
+    json = '';
+  }
+
+  // Google Sheets cell limit is ~50k characters. Keep a safety margin.
+  var maxLen = 48000;
+  if (json && json.length > maxLen) {
+    // Best effort: keep placeholders, drop tables if needed.
+    var minimal = {
+      placeholders: obj.placeholders || {},
+      tables: {},
+      options: obj.options || {}
+    };
+    try {
+      json = JSON.stringify(minimal);
+    } catch (e2) {
+      json = '';
+    }
+    if (json && json.length > maxLen) {
+      json = json.substring(0, maxLen);
+    }
+  }
+
+  return json;
+}
+
+function upsertInputTrackingRow_(kundeId, configId, googleDocId, structured) {
+  if (!kundeId || !configId) return { skipped: true, reason: 'missing_keys' };
+
+  const sheet = getInputsSheetForTracking_();
+  const now = new Date().toISOString();
+  const data = sheet.getDataRange().getValues();
+  const header = data[0] || [];
+
+  const idx = {
+    inputId: header.indexOf('inputId'),
+    kundeId: header.indexOf('kundeId'),
+    configId: header.indexOf('configId'),
+    googleDocId: header.indexOf('googleDocId'),
+    inputJson: header.indexOf('inputJson'),
+    createdAt: header.indexOf('createdAt'),
+    updatedAt: header.indexOf('updatedAt')
+  };
+
+  const hasHeader = idx.kundeId >= 0 && idx.configId >= 0 && idx.inputJson >= 0;
+  const json = safeStringifyInput_(structured);
+  const gId = googleDocId ? String(googleDocId) : '';
+
+  // Prefer exact match by googleDocId when available.
+  for (let r = 1; r < data.length; r++) {
+    const row = data[r];
+    const rowKundeId = hasHeader ? row[idx.kundeId] : row[1];
+    const rowConfigId = hasHeader ? row[idx.configId] : row[2];
+    const rowGoogleDocId = hasHeader ? row[idx.googleDocId] : row[3];
+
+    const matchKeys = String(rowKundeId) === String(kundeId) && String(rowConfigId) === String(configId);
+    const matchDoc = gId && String(rowGoogleDocId) === gId;
+    if (matchKeys && (matchDoc || (!gId && !rowGoogleDocId))) {
+      const rowNumber = r + 1;
+      if (hasHeader) {
+        if (idx.googleDocId >= 0 && gId) sheet.getRange(rowNumber, idx.googleDocId + 1).setValue(gId);
+        if (idx.inputJson >= 0) sheet.getRange(rowNumber, idx.inputJson + 1).setValue(json);
+        if (idx.updatedAt >= 0) sheet.getRange(rowNumber, idx.updatedAt + 1).setValue(now);
+      } else {
+        if (gId) sheet.getRange(rowNumber, 4).setValue(gId);
+        sheet.getRange(rowNumber, 5).setValue(json);
+        sheet.getRange(rowNumber, 7).setValue(now);
+      }
+      return { updated: true };
+    }
+  }
+
+  const inputId = nextInputId_();
+  if (hasHeader) {
+    const row = new Array(header.length).fill('');
+    if (idx.inputId >= 0) row[idx.inputId] = inputId;
+    if (idx.kundeId >= 0) row[idx.kundeId] = String(kundeId);
+    if (idx.configId >= 0) row[idx.configId] = String(configId);
+    if (idx.googleDocId >= 0) row[idx.googleDocId] = gId;
+    if (idx.inputJson >= 0) row[idx.inputJson] = json;
+    if (idx.createdAt >= 0) row[idx.createdAt] = now;
+    if (idx.updatedAt >= 0) row[idx.updatedAt] = now;
+    sheet.appendRow(row);
+  } else {
+    sheet.appendRow([inputId, String(kundeId), String(configId), gId, json, now, now]);
+  }
+
+  return { created: true, inputId: inputId };
+}
+
+function parseSavedInputJson_(raw) {
+  var s = String(raw || '').trim();
+  if (!s) return null;
+  try {
+    return JSON.parse(s);
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Load saved inputData for a customer/config.
+ * - If googleDocId is provided, returns the exact stored inputs for that document.
+ * - Otherwise returns the latest saved inputs for this kundeId+configId.
+ */
+function getSavedInputData(kundeId, configId, googleDocId) {
+  if (!kundeId) throw new Error('kundeId fehlt');
+  if (!configId) throw new Error('configId fehlt');
+
+  var sheet = getInputsSheetForTracking_();
+  var data = sheet.getDataRange().getValues();
+  if (!data || data.length < 2) {
+    return { success: true, found: false, inputData: { placeholders: {}, tables: {}, options: {} } };
+  }
+
+  var header = data[0] || [];
+  var idx = {
+    kundeId: header.indexOf('kundeId'),
+    configId: header.indexOf('configId'),
+    googleDocId: header.indexOf('googleDocId'),
+    inputJson: header.indexOf('inputJson'),
+    createdAt: header.indexOf('createdAt'),
+    updatedAt: header.indexOf('updatedAt')
+  };
+  var hasHeader = idx.kundeId >= 0 && idx.configId >= 0 && idx.inputJson >= 0;
+
+  var wantDocId = googleDocId ? String(googleDocId) : '';
+  var best = null;
+  var bestTs = 0;
+
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var rowKundeId = hasHeader ? row[idx.kundeId] : row[1];
+    var rowConfigId = hasHeader ? row[idx.configId] : row[2];
+    var rowGoogleDocId = hasHeader ? row[idx.googleDocId] : row[3];
+    if (String(rowKundeId) !== String(kundeId)) continue;
+    if (String(rowConfigId) !== String(configId)) continue;
+
+    if (wantDocId) {
+      if (String(rowGoogleDocId) !== wantDocId) continue;
+      best = row;
+      break;
+    }
+
+    var createdAt = hasHeader ? row[idx.createdAt] : row[5];
+    var updatedAt = hasHeader ? row[idx.updatedAt] : row[6];
+    var ts = parseIsoDate_(updatedAt) || parseIsoDate_(createdAt) || 0;
+    if (!best || ts >= bestTs) {
+      best = row;
+      bestTs = ts;
+    }
+  }
+
+  if (!best) {
+    return { success: true, found: false, inputData: { placeholders: {}, tables: {}, options: {} } };
+  }
+
+  var rawJson = hasHeader ? best[idx.inputJson] : best[4];
+  var parsed = parseSavedInputJson_(rawJson) || {};
+  var inputData = coerceStructuredInput_(parsed);
+
+  return {
+    success: true,
+    found: true,
+    inputData: inputData,
+    updatedAt: hasHeader ? best[idx.updatedAt] : best[6]
+  };
 }
 
 function upsertDocumentTrackingRow_(kundeId, configId, documentName, googleDocId, docUrl, templateType) {
@@ -945,6 +1153,15 @@ function updateBafaExistingDocument(googleDocId, configId, inputData, mode) {
     structured.options
   );
 
+  // Persist last used inputs for easier later edits
+  try {
+    if (kundeId) {
+      upsertInputTrackingRow_(kundeId, cfg.id, googleDocId, structured);
+    }
+  } catch (eSaveInput) {
+    // best effort
+  }
+
   // Touch tracking row if available
   try {
     if (kundeId) {
@@ -1002,6 +1219,13 @@ function processBafaDocumentForCustomer(kundeId, configId, inputData) {
       'replace',
       structured.options
     );
+  }
+
+  // Persist inputs for this created document so the form can be reopened later
+  try {
+    upsertInputTrackingRow_(kundeId, cfg.id, copiedId, structured);
+  } catch (eSaveInput2) {
+    // best effort
   }
 
   // Track document so it can be listed/edited later
