@@ -14,6 +14,8 @@ function DokumentManager() {
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newParentFolderId, setNewParentFolderId] = useState('');
 
+  const [logoFile, setLogoFile] = useState(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -80,6 +82,50 @@ function DokumentManager() {
     }
   };
 
+  const handleLogoUpload = async (e) => {
+    e.preventDefault();
+    if (!selectedCustomer?.kundeId) {
+      setError('Bitte zuerst einen Kunden auswählen');
+      return;
+    }
+    if (!logoFile) {
+      setError('Bitte eine Logo-Datei auswählen');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          await api.uploadLogo(selectedCustomer.kundeId, event.target.result);
+
+          // Refresh customers to get updated logoUrl
+          const refreshed = await api.listCustomers();
+          const list = refreshed?.customers || [];
+          setCustomers(list);
+          const updated = list.find((c) => c.kundeId === selectedCustomer.kundeId) || null;
+          setSelectedCustomer(updated);
+          setLogoFile(null);
+        } catch (err) {
+          setError(err?.message || String(err));
+        } finally {
+          setLoading(false);
+        }
+      };
+      reader.readAsDataURL(logoFile);
+    } catch (e2) {
+      setError(e2?.message || String(e2));
+      setLoading(false);
+    }
+  };
+
+  const customerFolderUrl = selectedCustomer?.folderId
+    ? `https://drive.google.com/drive/folders/${selectedCustomer.folderId}`
+    : '';
+
   return (
     <div className="dm-container">
       <div className="dm-header">
@@ -105,6 +151,52 @@ function DokumentManager() {
           ))}
         </select>
       </div>
+
+      {selectedCustomer?.kundeId && (
+        <div className="dm-card">
+          <h3>Ausgewählter Kunde</h3>
+          <div className="dm-row" style={{ alignItems: 'center' }}>
+            <div className="dm-field">
+              <div className="dm-label">Kunde</div>
+              <div>
+                <strong>{selectedCustomer.companyName}</strong> ({selectedCustomer.kundeId})
+              </div>
+              {customerFolderUrl && (
+                <div style={{ marginTop: 8 }}>
+                  Ordner:{' '}
+                  <a href={customerFolderUrl} target="_blank" rel="noopener noreferrer">
+                    In Drive öffnen
+                  </a>
+                </div>
+              )}
+              {selectedCustomer.logoUrl && (
+                <div style={{ marginTop: 8 }}>
+                  Logo-URL:{' '}
+                  <a href={selectedCustomer.logoUrl} target="_blank" rel="noopener noreferrer">
+                    anzeigen
+                  </a>
+                </div>
+              )}
+            </div>
+
+            <div className="dm-field">
+              <div className="dm-label">Logo hochladen</div>
+              <form onSubmit={handleLogoUpload} className="dm-form">
+                <input
+                  className="dm-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                  disabled={loading}
+                />
+                <button className="dm-btn" type="submit" disabled={loading || !logoFile}>
+                  {loading ? 'Wird hochgeladen…' : 'Logo hochladen'}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="dm-card">
         <h3>Neuen Kunden anlegen</h3>

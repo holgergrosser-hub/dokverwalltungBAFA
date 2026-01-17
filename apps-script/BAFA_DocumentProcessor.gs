@@ -107,6 +107,127 @@ function escapeForRegex_(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function pickFirst_(obj, keys) {
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    if (obj && obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') return obj[k];
+  }
+  return '';
+}
+
+function extractDriveFileId_(maybeUrlOrId) {
+  var s = String(maybeUrlOrId || '').trim();
+  if (!s) return '';
+
+  // Already looks like an id
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(s) && s.indexOf('http') !== 0) return s;
+
+  // /d/<id>/
+  var m = s.match(/\/d\/([a-zA-Z0-9_-]{20,})\//);
+  if (m && m[1]) return m[1];
+
+  // id=<id>
+  m = s.match(/[?&]id=([a-zA-Z0-9_-]{20,})/);
+  if (m && m[1]) return m[1];
+
+  return '';
+}
+
+function addPlaceholderWithVariants_(placeholders, key, value) {
+  if (!key) return;
+  var v = value === null || value === undefined ? '' : String(value);
+  if (v.trim() === '') return;
+
+  // Always set the explicit key
+  placeholders[key] = placeholders[key] || v;
+
+  var base = String(key);
+  var lower = base.toLowerCase();
+  var upper = base.toUpperCase();
+  var title = base.length ? base.charAt(0).toUpperCase() + base.slice(1).toLowerCase() : base;
+  var capFirst = base.length ? base.charAt(0).toUpperCase() + base.slice(1) : base;
+
+  placeholders[lower] = placeholders[lower] || v;
+  placeholders[upper] = placeholders[upper] || v;
+  placeholders[title] = placeholders[title] || v;
+  placeholders[capFirst] = placeholders[capFirst] || v;
+
+  // Handle underscores by capitalizing each part (plz_ort -> PLZ_Ort)
+  if (base.indexOf('_') >= 0) {
+    var parts = base.split('_');
+    var mapped = parts
+      .map(function (p) {
+        if (!p) return p;
+        if (p.length <= 3) return p.toUpperCase();
+        return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+      })
+      .join('_');
+    placeholders[mapped] = placeholders[mapped] || v;
+  }
+
+  // German umlaut/transliteration variants (strasse <-> straße, ae<->ä, oe<->ö, ue<->ü)
+  var de1 = base
+    .replace(/ss/g, 'ß')
+    .replace(/ae/g, 'ä')
+    .replace(/oe/g, 'ö')
+    .replace(/ue/g, 'ü');
+  var de2 = base
+    .replace(/ß/g, 'ss')
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/Ä/g, 'Ae')
+    .replace(/Ö/g, 'Oe')
+    .replace(/Ü/g, 'Ue');
+
+  if (de1 !== base) placeholders[de1] = placeholders[de1] || v;
+  if (de2 !== base) placeholders[de2] = placeholders[de2] || v;
+}
+
+function mergeStandardPlaceholders_(kundeId, structured) {
+  var placeholders = structured.placeholders || {};
+
+  var customer = null;
+  if (typeof getCustomer === 'function') {
+    try {
+      customer = getCustomer(kundeId);
+    } catch (e) {
+      customer = null;
+    }
+  }
+
+  var firmendaten = null;
+  if (typeof getFirmendaten === 'function') {
+    try {
+      firmendaten = getFirmendaten(kundeId) || {};
+    } catch (e) {
+      firmendaten = null;
+    }
+  }
+
+  var firmenname = pickFirst_(placeholders, ['Firmenname', 'firmenname', 'FIRMENNAME']);
+  if (!firmenname) firmenname = pickFirst_(firmendaten, ['firmenname', 'companyName', 'name']);
+  if (!firmenname && customer && customer.companyName) firmenname = customer.companyName;
+  addPlaceholderWithVariants_(placeholders, 'Firmenname', firmenname);
+
+  var strasse = pickFirst_(firmendaten, ['strasse', 'straße', 'adresse', 'street']);
+  addPlaceholderWithVariants_(placeholders, 'Straße', strasse);
+
+  var plz = pickFirst_(firmendaten, ['plz', 'postleitzahl', 'zip']);
+  var ort = pickFirst_(firmendaten, ['ort', 'stadt', 'city']);
+  var plzOrt = (String(plz || '').trim() + ' ' + String(ort || '').trim()).trim();
+  addPlaceholderWithVariants_(placeholders, 'PLZ_Ort', plzOrt);
+
+  var email = pickFirst_(firmendaten, ['email', 'eMail', 'mail']);
+  addPlaceholderWithVariants_(placeholders, 'email', email);
+
+  var webpage = pickFirst_(firmendaten, ['webpage', 'homepage', 'website', 'webseite']);
+  addPlaceholderWithVariants_(placeholders, 'Webpage', webpage);
+
+  structured.placeholders = placeholders;
+  return { customer: customer, firmendaten: firmendaten };
+}
+
 function coerceStructuredInput_(inputData) {
   if (!inputData || typeof inputData !== 'object' || Array.isArray(inputData)) {
     throw new Error('inputData must be an object: { placeholders, tables }');
@@ -143,15 +264,81 @@ function makeCopy_(templateId, name, folderId) {
   return file.makeCopy(name);
 }
 
-function applyDocReplacements_(docId, placeholders, tables) {
+function insertLogoIfPresent_(body, customer) {
+  if (!customer) return false;
+  var raw = customer.logoFileId || customer.logoId || customer.logoUrl || '';
+  var fileId = extractDriveFileId_(raw);
+  if (!fileId) return false;
+
+  var blob;
+  try {
+    blob = DriveApp.getFileById(fileId).getBlob();
+  } catch (e) {
+    return false;
+  }
+
+  // Try several common placeholders
+  var tokens = ['{{LOGO}}', '{{Logo}}', '{{logo}}', '{{FIRMENLOGO}}', '{{Firmenlogo}}'];
+  var replacedAny = false;
+
+  tokens.forEach(function (token) {
+    var found = body.findText(escapeForRegex_(token));
+    while (found) {
+      var text = found.getElement().asText();
+      var start = found.getStartOffset();
+      var end = found.getEndOffsetInclusive();
+      text.deleteText(start, end);
+      text.insertInlineImage(start, blob);
+      replacedAny = true;
+      found = body.findText(escapeForRegex_(token), found);
+    }
+  });
+
+  return replacedAny;
+}
+
+function applyDocReplacements_(docId, placeholders, tables, customer) {
   const doc = DocumentApp.openById(docId);
   const body = doc.getBody();
+
+  // Optional: insert logo image where template has {{LOGO}}
+  insertLogoIfPresent_(body, customer);
 
   // Replace scalar placeholders {{KEY}}
   Object.keys(placeholders || {}).forEach(function (key) {
     const value = placeholders[key];
-    const needle = '{{' + key + '}}';
-    body.replaceText(escapeForRegex_(needle), value === null || value === undefined ? '' : String(value));
+    const v = value === null || value === undefined ? '' : String(value);
+
+    // Try common variants of the placeholder token
+    var candidates = [];
+    candidates.push('{{' + key + '}}');
+    candidates.push('{{' + String(key).toLowerCase() + '}}');
+    candidates.push('{{' + String(key).toUpperCase() + '}}');
+    candidates.push('{{' + (String(key).length ? String(key).charAt(0).toUpperCase() + String(key).slice(1) : String(key)) + '}}');
+
+    // German transliteration variants
+    var k = String(key);
+    var kDe1 = k.replace(/ss/g, 'ß').replace(/ae/g, 'ä').replace(/oe/g, 'ö').replace(/ue/g, 'ü');
+    var kDe2 = k
+      .replace(/ß/g, 'ss')
+      .replace(/ä/g, 'ae')
+      .replace(/ö/g, 'oe')
+      .replace(/ü/g, 'ue')
+      .replace(/Ä/g, 'Ae')
+      .replace(/Ö/g, 'Oe')
+      .replace(/Ü/g, 'Ue');
+    if (kDe1 !== k) candidates.push('{{' + kDe1 + '}}');
+    if (kDe2 !== k) candidates.push('{{' + kDe2 + '}}');
+
+    // De-duplicate
+    var uniq = {};
+    candidates.forEach(function (c) {
+      uniq[c] = true;
+    });
+
+    Object.keys(uniq).forEach(function (needle) {
+      body.replaceText(escapeForRegex_(needle), v);
+    });
   });
 
   // Replace tables via {{TABLE_name}} or append
@@ -190,6 +377,7 @@ function processBafaDocumentForCustomer(kundeId, configId, inputData) {
   }
 
   const structured = coerceStructuredInput_(inputData);
+  const ctx = mergeStandardPlaceholders_(kundeId, structured);
 
   const folderId = getCustomerFolderIdForDocs_(kundeId);
   const ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
@@ -200,7 +388,7 @@ function processBafaDocumentForCustomer(kundeId, configId, inputData) {
   const url = copied.getUrl();
 
   if (cfg.templateType === 'doc') {
-    applyDocReplacements_(copiedId, structured.placeholders, structured.tables);
+    applyDocReplacements_(copiedId, structured.placeholders, structured.tables, ctx.customer);
   }
 
   // For sheets we just copy and return URL (no structured writing yet)
