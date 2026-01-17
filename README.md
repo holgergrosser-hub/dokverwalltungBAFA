@@ -2,6 +2,46 @@
 
 Vite/React-Frontend für ein Google Apps Script WebApp Backend zur Kundenverwaltung und Dokument-Erstellung.
 
+## Wichtig: So bleibt alles „sauber“ (einfacher Workflow)
+
+**Merksatz:** Arbeite immer im Ordner, der eine **`.git`** enthält (das ist das echte GitHub-Repo).
+
+### 1) Einmalig einrichten
+
+1. Repo in VS Code klonen
+   - VS Code → Source Control → **Clone Repository** → GitHub URL auswählen
+2. Abhängigkeiten installieren
+   - `npm install`
+3. Lokal starten
+   - `npm run dev`
+
+### 2) Täglicher Ablauf (Änderung → online)
+
+1. Vor dem Start: `git pull`
+2. Änderungen machen (z.B. `src/configs/bafa-configs.js`)
+3. Prüfen: `npm run build`
+4. In VS Code: Source Control → **Commit** → **Push**
+5. Netlify deployed automatisch nach dem Push (Deploys im Netlify Dashboard prüfen).
+
+### 3) Wenn du Templates/Platzhalter änderst (Google Docs)
+
+Es gibt **zwei Deploys**:
+
+- **Frontend (Netlify):** automatisch per Git Push
+- **Apps Script:** **manuell** in Apps Script → Deploy → *Manage deployments* → *Edit* → *New version* → Deploy
+
+Wenn du neue Tokens ins Template schreibst:
+
+- Token-Syntax ist immer **doppelte Klammern**: `{{TOKEN}}`
+- Für Managementbewertung ist das Datum-Feld im Frontend als **Auto-Heute** gesetzt.
+  - Template kann z.B. `{{BEWERTUNGSDATUM}}` oder `{{Bewertungsdatum}}` verwenden.
+
+### 4) Häufige Fehler (und schnelle Checks)
+
+- **Falscher Ordner bearbeitet:** Prüfe, ob im Explorer eine `.git` existiert (oder `git status` klappt).
+- **Netlify zeigt alte Version:** Im Netlify Dashboard den neuesten Deploy abwarten und Seite hart neu laden.
+- **Apps Script wirkt „alt“:** Apps Script Deployment wurde nicht als *New version* veröffentlicht.
+
 ## Setup
 
 - Install: `npm install`

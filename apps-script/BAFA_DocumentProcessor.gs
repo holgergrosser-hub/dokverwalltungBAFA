@@ -977,7 +977,26 @@ function applyPlaceholdersToContainer_(container, placeholders) {
     candidates.push('{{' + key + '}}');
     candidates.push('{{' + String(key).toLowerCase() + '}}');
     candidates.push('{{' + String(key).toUpperCase() + '}}');
-    candidates.push('{{' + (String(key).length ? String(key).charAt(0).toUpperCase() + String(key).slice(1) : String(key)) + '}}');
+
+    // Title-case and cap-first variants (e.g. BEWERTUNGSDATUM -> Bewertungsdatum)
+    var k0 = String(key || '');
+    var capFirst = k0.length ? k0.charAt(0).toUpperCase() + k0.slice(1) : k0;
+    var title = k0.length ? k0.charAt(0).toUpperCase() + k0.slice(1).toLowerCase() : k0;
+    candidates.push('{{' + capFirst + '}}');
+    candidates.push('{{' + title + '}}');
+
+    // Underscore title-case (PLZ_ORT -> PLZ_Ort)
+    if (k0.indexOf('_') >= 0) {
+      var parts = k0.split('_');
+      var mapped = parts
+        .map(function (p) {
+          if (!p) return p;
+          if (p.length <= 3) return p.toUpperCase();
+          return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+        })
+        .join('_');
+      candidates.push('{{' + mapped + '}}');
+    }
 
     // German transliteration variants
     var k = String(key);

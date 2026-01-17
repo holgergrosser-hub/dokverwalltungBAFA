@@ -1,0 +1,13 @@
+{
+  "files.exclude": {
+    "node_modules": true,
+    "dist": true,
+    ".netlify": true
+  },
+  "search.exclude": {
+    "node_modules/**": true,
+    "dist/**": true,
+    ".netlify/**": true
+  },
+  "git.autofetch": true
+}
