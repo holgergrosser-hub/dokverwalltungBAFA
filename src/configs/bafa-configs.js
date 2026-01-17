@@ -239,7 +239,36 @@ export const BAFA_CONFIGS = {
       { key: 'FIRMENNAME', label: 'Firmenname', source: 'firmendaten.firmenname', required: true },
       { key: 'VERSION', label: 'Version', required: true },
       { key: 'GUELTIG_AB', label: 'Gültig ab', type: 'date', required: true },
-      { key: 'ERSTELLT_VON', label: 'Erstellt von', source: 'firmendaten.qmb', required: true }
+      { key: 'ERSTELLT_VON', label: 'Erstellt von', source: 'firmendaten.qmb', required: true },
+
+      // Zusätzliche Inhalte aus Firmendaten (für Template-Platzhalter)
+      { key: 'ZIELGRUPPE', label: 'Zielgruppe', source: 'firmendaten.zielgruppe', required: false },
+      { key: 'ZIELGEBIET', label: 'Zielgebiet', source: 'firmendaten.zielgebiet', required: false },
+      {
+        key: 'GESCHAEFTSFUEHRER',
+        label: 'Geschäftsführer',
+        source: 'firmendaten.geschaeftsfuehrer',
+        required: false
+      },
+      { key: 'QMB', label: 'QMB', source: 'firmendaten.qmb', required: false },
+      {
+        key: 'UNTERNEHMENSPOLITIK',
+        label: 'Unternehmenspolitik',
+        source: 'firmendaten.unternehmenspolitik',
+        required: false
+      },
+      {
+        key: 'QUALITAETSPOLITIK',
+        label: 'Qualitätspolitik',
+        source: 'firmendaten.qualitaetspolitik',
+        required: false
+      },
+      {
+        key: 'DATENSICHERUNG',
+        label: 'Datensicherung (IT/Datenschutz)',
+        source: 'firmendaten.datensicherung',
+        required: false
+      }
     ],
 
     tables: []
