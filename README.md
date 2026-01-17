@@ -47,6 +47,20 @@ Für Google-Doc-Templates (insb. **Managementbewertung** und **Auditbericht**) i
 
 - `docs/PLATZHALTER.md`
 
+## Deploy-Checkliste (Reminder)
+
+Wenn du **Google-Doc-Templates** oder **Platzhalter** änderst (z.B. Managementbewertung/Auditbericht):
+
+1. Platzhalter prüfen/aktualisieren: `docs/PLATZHALTER.md`
+2. Frontend (Netlify) aktualisieren:
+   - Falls neue Formularfelder/Keys nötig sind: `src/configs/bafa-configs.js` anpassen
+   - Deploy auslösen (Netlify) oder lokal: `npm run build`
+3. Apps Script aktualisieren:
+   - Code aus `apps-script/*.gs` in dein Apps Script Projekt kopieren
+   - Deploy → **Manage deployments** → Deployment **Edit** → **New version** → Deploy
+
+Hinweis: Firmendaten-Platzhalter können serverseitig global verfügbar gemacht werden (siehe `mergeStandardPlaceholders_` im BAFA Processor).
+
 Minimaler Deploy-Flow:
 
 1. Google Drive → Neues Apps Script Projekt
