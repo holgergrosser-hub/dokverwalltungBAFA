@@ -20,6 +20,8 @@ function DokumentManager() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const [firmendatenReloadKey, setFirmendatenReloadKey] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -271,9 +273,17 @@ function DokumentManager() {
           </div>
         )}
 
-        {activeTab === 'bafa' && <BAFABereich kunde={selectedCustomer} api={api} />}
+        {activeTab === 'bafa' && (
+          <BAFABereich kunde={selectedCustomer} api={api} firmendatenReloadKey={firmendatenReloadKey} />
+        )}
 
-        {activeTab === 'firmendaten' && <Firmendaten kunde={selectedCustomer} api={api} />}
+        {activeTab === 'firmendaten' && (
+          <Firmendaten
+            kunde={selectedCustomer}
+            api={api}
+            onSaved={() => setFirmendatenReloadKey((k) => k + 1)}
+          />
+        )}
 
         {activeTab === 'hilfe' && <Hilfe />}
       </div>

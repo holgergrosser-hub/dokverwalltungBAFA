@@ -34,7 +34,7 @@ function buildDocUrlFromRecord(doc) {
  * - Form wird aus src/configs/bafa-configs.js generiert
  * - sendet inputData strukturiert an das Backend (placeholders + tables)
  */
-function BAFABereich({ kunde, api: apiProp }) {
+function BAFABereich({ kunde, api: apiProp, firmendatenReloadKey = 0 }) {
   const api = useMemo(() => apiProp ?? createBafaApi(), [apiProp]);
 
   const [selectedKey, setSelectedKey] = useState('');
@@ -136,7 +136,7 @@ function BAFABereich({ kunde, api: apiProp }) {
     return () => {
       cancelled = true;
     };
-  }, [api, kunde?.kundeId, config?.id]);
+  }, [api, kunde?.kundeId, config?.id, firmendatenReloadKey]);
 
   // Prefill placeholderData from firmendaten sources
   useEffect(() => {
