@@ -581,6 +581,27 @@ function coerceStructuredInput_(inputData) {
   return { placeholders: placeholders, tables: tables, options: options };
 }
 
+function todayIsoDate_() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function ensureDefaultsForConfig_(configId, structured) {
+  var id = String(configId || '');
+  if (!structured || typeof structured !== 'object') return structured;
+  if (!structured.placeholders || typeof structured.placeholders !== 'object') structured.placeholders = {};
+
+  // Managementbewertung: wenn kein Datum eingegeben ist, verwende heute.
+  // Template kann {{BEWERTUNGSDATUM}} oder {{Bewertungsdatum}} enthalten (Varianten werden ersetzt).
+  if (id === 'bafa_04_managementbewertung') {
+    var cur = structured.placeholders.BEWERTUNGSDATUM;
+    if (cur === undefined || cur === null || String(cur).trim() === '') {
+      structured.placeholders.BEWERTUNGSDATUM = todayIsoDate_();
+    }
+  }
+
+  return structured;
+}
+
 function extractUnresolvedTokensFromContainer_(container) {
   if (!container || typeof container.getText !== 'function') return [];
   var text = '';
@@ -1132,7 +1153,7 @@ function updateBafaExistingDocument(googleDocId, configId, inputData, mode) {
     throw new Error('Update wird aktuell nur für Google Docs unterstützt (nicht für Sheets).');
   }
 
-  const structured = coerceStructuredInput_(inputData);
+  const structured = ensureDefaultsForConfig_(configId, coerceStructuredInput_(inputData));
 
   // Try to infer kundeId from tracking sheet (best effort)
   var kundeId = structured.kundeId || structured.customerId || '';
@@ -1217,7 +1238,7 @@ function processBafaDocumentForCustomer(kundeId, configId, inputData) {
     throw new Error('Kein Template hinterlegt für ' + cfg.name + ' (' + cfg.id + ')');
   }
 
-  const structured = coerceStructuredInput_(inputData);
+  const structured = ensureDefaultsForConfig_(configId, coerceStructuredInput_(inputData));
   const ctx = mergeStandardPlaceholders_(kundeId, structured);
 
   const folderId = getCustomerFolderIdForDocs_(kundeId);
