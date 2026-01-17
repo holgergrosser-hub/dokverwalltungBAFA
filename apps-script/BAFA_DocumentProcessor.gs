@@ -619,6 +619,37 @@ function makeCopy_(templateId, name, folderId) {
   return file.makeCopy(name);
 }
 
+function limitInlineImageSize_(inlineImage, maxWidth, maxHeight) {
+  if (!inlineImage) return;
+  var w = 0;
+  var h = 0;
+  try {
+    w = inlineImage.getWidth();
+    h = inlineImage.getHeight();
+  } catch (e) {
+    return;
+  }
+
+  if (!w || !h) return;
+
+  var mw = Number(maxWidth) || 0;
+  var mh = Number(maxHeight) || 0;
+  if (!mw && !mh) return;
+
+  // Keep aspect ratio and only scale down.
+  var scaleW = mw ? mw / w : 1;
+  var scaleH = mh ? mh / h : 1;
+  var scale = Math.min(scaleW, scaleH, 1);
+  if (!(scale > 0) || scale === 1) return;
+
+  try {
+    inlineImage.setWidth(Math.round(w * scale));
+    inlineImage.setHeight(Math.round(h * scale));
+  } catch (e2) {
+    // ignore
+  }
+}
+
 function replaceFoundTextWithInlineImage_(found, blob) {
   if (!found) return false;
 
@@ -656,7 +687,9 @@ function replaceFoundTextWithInlineImage_(found, blob) {
   try {
     var childIndex = parent.getChildIndex(textEl);
     if (parent.insertInlineImage) {
-      parent.insertInlineImage(childIndex + 1, blob);
+      var img = parent.insertInlineImage(childIndex + 1, blob);
+      // Cap logo size (in pixels) to keep templates tidy.
+      limitInlineImageSize_(img, 140, 80);
       if (after) {
         if (parent.insertText) parent.insertText(childIndex + 2, after);
         else if (parent.appendText) parent.appendText(after);
@@ -669,7 +702,10 @@ function replaceFoundTextWithInlineImage_(found, blob) {
 
   // Fallback: append image and remaining text
   try {
-    if (parent.appendInlineImage) parent.appendInlineImage(blob);
+    if (parent.appendInlineImage) {
+      var img2 = parent.appendInlineImage(blob);
+      limitInlineImageSize_(img2, 140, 80);
+    }
     if (after) {
       if (parent.appendText) parent.appendText(after);
     }
