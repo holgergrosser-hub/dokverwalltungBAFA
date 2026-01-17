@@ -12,7 +12,7 @@
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Methods': 'POST,OPTIONS'
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
 };
 
 const PROXY_VERSION = '2026-01-16a';
@@ -20,6 +20,25 @@ const PROXY_VERSION = '2026-01-16a';
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' };
+  }
+
+  if (event.httpMethod === 'GET') {
+    const apiUrl = process.env.BAFA_API_URL;
+    const apiPassword = process.env.BAFA_API_PASSWORD;
+
+    return {
+      statusCode: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-BAFA-Proxy-Version': PROXY_VERSION },
+      body: JSON.stringify({
+        status: 'online',
+        proxyVersion: PROXY_VERSION,
+        configured: {
+          BAFA_API_URL: Boolean(apiUrl),
+          BAFA_API_PASSWORD: Boolean(apiPassword)
+        },
+        hint: 'Use POST with JSON body { "action": "..." } to call the backend.'
+      })
+    };
   }
 
   if (event.httpMethod !== 'POST') {

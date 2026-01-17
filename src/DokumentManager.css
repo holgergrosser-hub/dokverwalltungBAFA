@@ -1,0 +1,177 @@
+.dm-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.dm-header h1 {
+  margin: 0 0 4px;
+}
+
+.dm-header p {
+  margin: 0 0 16px;
+  color: #666;
+}
+
+.dm-card {
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.dm-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.dm-select,
+.dm-input {
+  width: 100%;
+  border: 1px solid #d6d6d6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.dm-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 860px) {
+  .dm-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dm-btn {
+  margin-top: 12px;
+  background: #1f6feb;
+  border: 0;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.dm-btn:disabled {
+  background: #9bbcf3;
+  cursor: not-allowed;
+}
+
+.dm-alert {
+  padding: 12px;
+  border-radius: 8px;
+  background: #f3f6ff;
+  border: 1px solid #d7e3ff;
+}
+
+.dm-alert-error {
+  background: #ffebee;
+  border: 1px solid #ffcdd2;
+  margin-bottom: 12px;
+}
+
+.dm-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+
+.dm-tabs button {
+  border: 1px solid #d6d6d6;
+  background: #fff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.dm-tabs button.active {
+  border-color: #1f6feb;
+  color: #1f6feb;
+  font-weight: 700;
+}
+
+/* Shared styles used by BAFABereich */
+
+.bereich {
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.description {
+  color: #666;
+}
+
+.info-box {
+  background: #f7f7f7;
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 12px 0;
+}
+
+.info-box.warning {
+  background: #fff8e1;
+  border-color: #ffecb3;
+}
+
+.info-box.error {
+  background: #ffebee;
+  border-color: #ffcdd2;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.select-large {
+  width: 100%;
+  border: 1px solid #d6d6d6;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.required {
+  color: #d32f2f;
+  margin-left: 4px;
+}
+
+.hint {
+  margin-left: 8px;
+  color: #666;
+  font-weight: 400;
+}
+
+.textarea-large {
+  width: 100%;
+  border: 1px solid #d6d6d6;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.btn-primary {
+  background: #1f6feb;
+  border: 0;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-primary:disabled {
+  background: #9bbcf3;
+  cursor: not-allowed;
+}

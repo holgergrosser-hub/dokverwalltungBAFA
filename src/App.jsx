@@ -1,7 +1,8 @@
-import BAFADokumente from './BAFADokumente'
+import DokumentManager from './DokumentManager'
+import './DokumentManager.css'
 
 function App() {
-  return <BAFADokumente />
+  return <DokumentManager />
 }
 
 export default App

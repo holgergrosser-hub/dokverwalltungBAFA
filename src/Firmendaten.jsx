@@ -18,6 +18,17 @@ function Firmendaten({ kunde, api: apiProp, onSaved }) {
   }, [apiProp]);
 
   const [formData, setFormData] = useState({
+    // Neue/erweiterte Felder (für BAFA Platzhalter-Quellen)
+    firmenname: '',
+    strasse: '',
+    plz: '',
+    ort: '',
+    email: '',
+    webpage: '',
+    anzahlMitarbeiter: '',
+    gruendungsdatum: '',
+
+    // Legacy Felder (beibehalten für Abwärtskompatibilität)
     adresse: '',
     homepage: '',
     gruendungsjahr: '',
@@ -66,10 +77,23 @@ function Firmendaten({ kunde, api: apiProp, onSaved }) {
           {};
 
         if (!cancelled) {
-          setFormData((prev) => ({
-            ...prev,
-            ...(loaded || {})
-          }));
+          setFormData((prev) => {
+            const merged = {
+              ...prev,
+              ...(loaded || {})
+            };
+
+            // Fallbacks/Sync für Feld-Aliase
+            if (!merged.firmenname && kunde?.companyName) merged.firmenname = kunde.companyName;
+            if (!merged.webpage && merged.homepage) merged.webpage = merged.homepage;
+            if (!merged.homepage && merged.webpage) merged.homepage = merged.webpage;
+            if (!merged.anzahlMitarbeiter && merged.mitarbeiterAnzahl) merged.anzahlMitarbeiter = merged.mitarbeiterAnzahl;
+            if (!merged.mitarbeiterAnzahl && merged.anzahlMitarbeiter) merged.mitarbeiterAnzahl = merged.anzahlMitarbeiter;
+            if (!merged.gruendungsdatum && merged.gruendungsjahr) merged.gruendungsdatum = merged.gruendungsjahr;
+            if (!merged.gruendungsjahr && merged.gruendungsdatum) merged.gruendungsjahr = String(merged.gruendungsdatum).slice(0, 4);
+
+            return merged;
+          });
           setLoadedCount(loaded && typeof loaded === 'object' ? Object.keys(loaded).length : 0);
         }
       } catch (e) {
@@ -111,7 +135,23 @@ function Firmendaten({ kunde, api: apiProp, onSaved }) {
     setError(null);
 
     try {
-      const data = await api.saveFirmendaten(kunde.kundeId, formData);
+      const normalized = {
+        ...formData,
+        firmenname: formData.firmenname || kunde?.companyName || '',
+        webpage: formData.webpage || formData.homepage || '',
+        homepage: formData.homepage || formData.webpage || '',
+        anzahlMitarbeiter: formData.anzahlMitarbeiter || formData.mitarbeiterAnzahl || '',
+        mitarbeiterAnzahl: formData.mitarbeiterAnzahl || formData.anzahlMitarbeiter || '',
+        gruendungsdatum: formData.gruendungsdatum || formData.gruendungsjahr || '',
+        gruendungsjahr: formData.gruendungsjahr || String(formData.gruendungsdatum || '').slice(0, 4)
+      };
+
+      // Legacy: wenn adresse leer, aus strasse/plz/ort zusammenbauen
+      if (!normalized.adresse && (normalized.strasse || normalized.plz || normalized.ort)) {
+        normalized.adresse = [normalized.strasse, [normalized.plz, normalized.ort].filter(Boolean).join(' ')].filter(Boolean).join('\n');
+      }
+
+      const data = await api.saveFirmendaten(kunde.kundeId, normalized);
       setLastSaved(new Date());
       if (typeof onSaved === 'function') {
         onSaved(data);
@@ -171,6 +211,37 @@ function Firmendaten({ kunde, api: apiProp, onSaved }) {
         <div className="form-section">
           <h3>Basis</h3>
 
+          <div className="form-row">
+            <div className="form-group">
+              <label>Firmenname</label>
+              <input
+                name="firmenname"
+                value={formData.firmenname || ''}
+                onChange={handleChange}
+                placeholder="z.B. Muster GmbH"
+              />
+            </div>
+            <div className="form-group">
+              <label>E-Mail</label>
+              <input name="email" value={formData.email || ''} onChange={handleChange} placeholder="info@..." />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Straße</label>
+              <input name="strasse" value={formData.strasse || ''} onChange={handleChange} placeholder="Straße Nr." />
+            </div>
+            <div className="form-group">
+              <label>PLZ</label>
+              <input name="plz" value={formData.plz || ''} onChange={handleChange} placeholder="12345" />
+            </div>
+            <div className="form-group">
+              <label>Ort</label>
+              <input name="ort" value={formData.ort || ''} onChange={handleChange} placeholder="Ort" />
+            </div>
+          </div>
+
           <div className="form-group">
             <label>Adresse</label>
             <textarea
@@ -193,12 +264,43 @@ function Firmendaten({ kunde, api: apiProp, onSaved }) {
             </div>
 
             <div className="form-group">
+              <label>Webseite (Alias)</label>
+              <input
+                name="webpage"
+                value={formData.webpage || ''}
+                onChange={handleChange}
+                placeholder="https://..."
+              />
+            </div>
+
+            <div className="form-group">
               <label>Gründungsjahr</label>
               <input
                 name="gruendungsjahr"
                 value={formData.gruendungsjahr || ''}
                 onChange={handleChange}
                 placeholder="z.B. 2018"
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Gründungsdatum (Alias)</label>
+              <input
+                name="gruendungsdatum"
+                value={formData.gruendungsdatum || ''}
+                onChange={handleChange}
+                placeholder="z.B. 2018 oder 2018-01-01"
+              />
+            </div>
+            <div className="form-group">
+              <label>Mitarbeiter (Alias)</label>
+              <input
+                name="anzahlMitarbeiter"
+                value={formData.anzahlMitarbeiter || ''}
+                onChange={handleChange}
+                placeholder="z.B. 12"
               />
             </div>
           </div>
