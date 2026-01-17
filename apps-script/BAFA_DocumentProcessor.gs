@@ -207,23 +207,34 @@ function mergeStandardPlaceholders_(kundeId, structured) {
     }
   }
 
-  var firmenname = pickFirst_(placeholders, ['Firmenname', 'firmenname', 'FIRMENNAME']);
-  if (!firmenname) firmenname = pickFirst_(firmendaten, ['firmenname', 'companyName', 'name']);
+  var firmenname = pickFirst_(placeholders, ['Firmenname', 'firmenname', 'FIRMENNAME', 'FIRMEN_name']);
+  if (!firmenname) {
+    firmenname = pickFirst_(firmendaten, [
+      'firmenname',
+      'FIRMENNAME',
+      'Firma',
+      'FIRMA',
+      'companyName',
+      'COMPANYNAME',
+      'name',
+      'NAME'
+    ]);
+  }
   if (!firmenname && customer && customer.companyName) firmenname = customer.companyName;
   addPlaceholderWithVariants_(placeholders, 'Firmenname', firmenname);
 
-  var strasse = pickFirst_(firmendaten, ['strasse', 'straße', 'adresse', 'street']);
+  var strasse = pickFirst_(firmendaten, ['strasse', 'STRASSE', 'straße', 'Straße', 'adresse', 'ADRESSE', 'street', 'STREET']);
   addPlaceholderWithVariants_(placeholders, 'Straße', strasse);
 
-  var plz = pickFirst_(firmendaten, ['plz', 'postleitzahl', 'zip']);
-  var ort = pickFirst_(firmendaten, ['ort', 'stadt', 'city']);
+  var plz = pickFirst_(firmendaten, ['plz', 'PLZ', 'postleitzahl', 'POSTLEITZAHL', 'zip', 'ZIP']);
+  var ort = pickFirst_(firmendaten, ['ort', 'ORT', 'stadt', 'STADT', 'city', 'CITY']);
   var plzOrt = (String(plz || '').trim() + ' ' + String(ort || '').trim()).trim();
   addPlaceholderWithVariants_(placeholders, 'PLZ_Ort', plzOrt);
 
-  var email = pickFirst_(firmendaten, ['email', 'eMail', 'mail']);
+  var email = pickFirst_(firmendaten, ['email', 'EMAIL', 'eMail', 'mail', 'MAIL']);
   addPlaceholderWithVariants_(placeholders, 'email', email);
 
-  var webpage = pickFirst_(firmendaten, ['webpage', 'homepage', 'website', 'webseite']);
+  var webpage = pickFirst_(firmendaten, ['webpage', 'WEBPAGE', 'homepage', 'HOMEPAGE', 'website', 'WEBSITE', 'webseite', 'WEBSEITE']);
   addPlaceholderWithVariants_(placeholders, 'Webpage', webpage);
 
   // Logo placeholder variants (template often uses LOGO_URL)
@@ -456,6 +467,13 @@ function applyPlaceholdersToContainer_(container, placeholders) {
   });
 }
 
+function cleanupRemainingTokens_(container) {
+  if (!container) return;
+  // Remove any unreplaced tokens like {{SOMETHING}} to avoid documents with raw placeholders.
+  // This runs after normal replacement and table insertion.
+  container.replaceText('\\{\\{[^}]+\\}\\}', '');
+}
+
 function applyTablesToBody_(body, tables, mode) {
   if (!body) return;
   const isAppend = String(mode || '').toLowerCase() === 'append';
@@ -511,6 +529,11 @@ function applyDocReplacements_(docId, placeholders, tables, customer, mode) {
 
   // Tables are body-only (safe default)
   applyTablesToBody_(body, tables, mode);
+
+  // Final cleanup: remove any remaining {{...}} tokens
+  cleanupRemainingTokens_(body);
+  if (header) cleanupRemainingTokens_(header);
+  if (footer) cleanupRemainingTokens_(footer);
 
   doc.saveAndClose();
 }
