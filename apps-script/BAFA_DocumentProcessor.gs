@@ -384,6 +384,66 @@ function makeCopy_(templateId, name, folderId) {
   return file.makeCopy(name);
 }
 
+function replaceFoundTextWithInlineImage_(found, blob) {
+  if (!found) return false;
+
+  var el = found.getElement();
+  if (!el || !el.asText) return false;
+
+  var textEl = el.asText();
+  var start = found.getStartOffset();
+  var end = found.getEndOffsetInclusive();
+
+  // Find a parent element that supports inline image insertion (Paragraph/ListItem)
+  var parent = textEl.getParent();
+  while (parent && !(parent.insertInlineImage || parent.appendInlineImage)) {
+    parent = parent.getParent();
+  }
+
+  // If we can't insert the image, at least remove the token to avoid infinite loops.
+  if (!parent) {
+    try {
+      textEl.deleteText(start, end);
+    } catch (e) {
+      // ignore
+    }
+    return false;
+  }
+
+  var full = textEl.getText();
+  var before = full.substring(0, start);
+  var after = full.substring(end + 1);
+
+  // Keep the text before the token in the current text node
+  textEl.setText(before);
+
+  // Insert the image as a sibling element after the text node
+  try {
+    var childIndex = parent.getChildIndex(textEl);
+    if (parent.insertInlineImage) {
+      parent.insertInlineImage(childIndex + 1, blob);
+      if (after) {
+        if (parent.insertText) parent.insertText(childIndex + 2, after);
+        else if (parent.appendText) parent.appendText(after);
+      }
+      return true;
+    }
+  } catch (e) {
+    // fall through to append
+  }
+
+  // Fallback: append image and remaining text
+  try {
+    if (parent.appendInlineImage) parent.appendInlineImage(blob);
+    if (after) {
+      if (parent.appendText) parent.appendText(after);
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function insertLogoIfPresent_(body, customer) {
   if (!customer) return false;
   var raw = customer.logoFileId || customer.logoId || customer.logoUrl || '';
@@ -413,13 +473,12 @@ function insertLogoIfPresent_(body, customer) {
   tokens.forEach(function (token) {
     var found = body.findText(escapeForRegex_(token));
     while (found) {
-      var text = found.getElement().asText();
-      var start = found.getStartOffset();
-      var end = found.getEndOffsetInclusive();
-      text.deleteText(start, end);
-      text.insertInlineImage(start, blob);
-      replacedAny = true;
-      found = body.findText(escapeForRegex_(token), found);
+      // Replace token with inline image safely (cannot call insertInlineImage on Text)
+      var ok = replaceFoundTextWithInlineImage_(found, blob);
+      replacedAny = replacedAny || ok;
+
+      // Re-run search from scratch because we changed the element tree
+      found = body.findText(escapeForRegex_(token));
     }
   });
 
