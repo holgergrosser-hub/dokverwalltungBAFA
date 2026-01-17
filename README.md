@@ -47,7 +47,13 @@ Für Google-Doc-Templates (insb. **Managementbewertung** und **Auditbericht**) i
 
 - `docs/PLATZHALTER.md`
 
+## Hilfe (für Anwender)
+
+- `docs/HILFE.md`
+
 Hinweis: Wenn nach der Erstellung noch `{{...}}` Platzhalter im Dokument übrig sind, fragt das Frontend, ob sie entfernt werden sollen oder ob Eingaben nachgetragen werden.
+
+Hinweis: Für robuste Updates (auch nach Wochen) können Templates **Update-Zonen** enthalten (Marker `[[BAFA_ZONE:NAME]]` ... `[[/BAFA_ZONE:NAME]]`). Standardmäßig aktiv beim Update für Managementbewertung und Auditbericht.
 
 ## Deploy-Checkliste (Reminder)
 

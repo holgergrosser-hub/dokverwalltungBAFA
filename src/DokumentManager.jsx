@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createBafaApi } from './api/bafaApi';
 import BAFABereich from './components/BAFABereich';
 import Firmendaten from './Firmendaten';
+import Hilfe from './components/Hilfe';
 
 function DokumentManager() {
   const api = useMemo(() => createBafaApi(), []);
@@ -9,7 +10,7 @@ function DokumentManager() {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
 
-  const [activeTab, setActiveTab] = useState('bafa'); // 'iso' | 'bafa' | 'firmendaten'
+  const [activeTab, setActiveTab] = useState('bafa'); // 'iso' | 'bafa' | 'firmendaten' | 'hilfe'
 
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newParentFolderId, setNewParentFolderId] = useState('');
@@ -250,6 +251,13 @@ function DokumentManager() {
         >
           Firmendaten
         </button>
+        <button
+          type="button"
+          className={activeTab === 'hilfe' ? 'active' : ''}
+          onClick={() => setActiveTab('hilfe')}
+        >
+          Hilfe
+        </button>
       </div>
 
       <div className="dm-content">
@@ -266,6 +274,8 @@ function DokumentManager() {
         {activeTab === 'bafa' && <BAFABereich kunde={selectedCustomer} api={api} />}
 
         {activeTab === 'firmendaten' && <Firmendaten kunde={selectedCustomer} api={api} />}
+
+        {activeTab === 'hilfe' && <Hilfe />}
       </div>
     </div>
   );

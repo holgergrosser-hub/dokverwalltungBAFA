@@ -403,6 +403,197 @@ function collectUnresolvedTokens_(body, header, footer) {
   return Object.keys(uniq).sort();
 }
 
+// ==========================================
+// UPDATE-ZONEN (Marker-basiertes Template-Sync)
+// ==========================================
+
+// Marker müssen als eigener Absatz/Zeile im Template stehen.
+// Start: [[BAFA_ZONE:NAME]]
+// Ende:  [[/BAFA_ZONE:NAME]]
+
+function zoneStartMarker_(zoneName) {
+  return '[[BAFA_ZONE:' + String(zoneName || '').trim() + ']]';
+}
+
+function zoneEndMarker_(zoneName) {
+  return '[[/BAFA_ZONE:' + String(zoneName || '').trim() + ']]';
+}
+
+function extractZoneNamesFromContainer_(container) {
+  if (!container || typeof container.getText !== 'function') return [];
+  var text = '';
+  try {
+    text = String(container.getText() || '');
+  } catch (e) {
+    text = '';
+  }
+  if (!text) return [];
+
+  var re = /\[\[BAFA_ZONE:([A-Za-z0-9_-]+)\]\]/g;
+  var m;
+  var uniq = {};
+  while ((m = re.exec(text))) {
+    if (m[1]) uniq[String(m[1])] = true;
+  }
+  return Object.keys(uniq).sort();
+}
+
+function findMarkerChildIndex_(container, markerText) {
+  if (!container || !markerText) return -1;
+  var n = typeof container.getNumChildren === 'function' ? container.getNumChildren() : 0;
+  for (var i = 0; i < n; i++) {
+    var child = container.getChild(i);
+    if (!child || typeof child.getType !== 'function') continue;
+    var t = child.getType();
+    if (t === DocumentApp.ElementType.PARAGRAPH) {
+      var p = child.asParagraph();
+      var txt = '';
+      try {
+        txt = String(p.getText() || '');
+      } catch (e) {
+        txt = '';
+      }
+      if (txt && txt.indexOf(markerText) >= 0) return i;
+    } else if (t === DocumentApp.ElementType.LIST_ITEM) {
+      var li = child.asListItem();
+      var txt2 = '';
+      try {
+        txt2 = String(li.getText() || '');
+      } catch (e2) {
+        txt2 = '';
+      }
+      if (txt2 && txt2.indexOf(markerText) >= 0) return i;
+    }
+  }
+  return -1;
+}
+
+function getZoneRange_(container, zoneName) {
+  var name = String(zoneName || '').trim();
+  if (!name) return null;
+  var startMarker = zoneStartMarker_(name);
+  var endMarker = zoneEndMarker_(name);
+
+  var startIndex = findMarkerChildIndex_(container, startMarker);
+  var endIndex = findMarkerChildIndex_(container, endMarker);
+  if (startIndex < 0 || endIndex < 0) return null;
+  if (endIndex <= startIndex) return null;
+  return { startIndex: startIndex, endIndex: endIndex };
+}
+
+function insertChildCopy_(container, insertIndex, childCopy) {
+  if (!container || !childCopy) return false;
+  var t = childCopy.getType();
+  try {
+    if (t === DocumentApp.ElementType.PARAGRAPH && typeof container.insertParagraph === 'function') {
+      container.insertParagraph(insertIndex, childCopy.asParagraph());
+      return true;
+    }
+    if (t === DocumentApp.ElementType.LIST_ITEM && typeof container.insertListItem === 'function') {
+      container.insertListItem(insertIndex, childCopy.asListItem());
+      return true;
+    }
+    if (t === DocumentApp.ElementType.TABLE && typeof container.insertTable === 'function') {
+      container.insertTable(insertIndex, childCopy.asTable());
+      return true;
+    }
+  } catch (e) {
+    return false;
+  }
+  return false;
+}
+
+function syncSingleZoneFromTemplate_(targetContainer, templateContainer, zoneName) {
+  if (!targetContainer || !templateContainer) return { synced: false, reason: 'missing_container' };
+
+  var targetRange = getZoneRange_(targetContainer, zoneName);
+  var templateRange = getZoneRange_(templateContainer, zoneName);
+
+  if (!targetRange || !templateRange) return { synced: false, reason: 'zone_not_found' };
+
+  // Remove existing content between markers in TARGET
+  for (var i = targetRange.endIndex - 1; i > targetRange.startIndex; i--) {
+    try {
+      targetContainer.removeChild(targetContainer.getChild(i));
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // Copy elements between markers from TEMPLATE into TARGET
+  var insertAt = targetRange.startIndex + 1;
+  for (var j = templateRange.startIndex + 1; j < templateRange.endIndex; j++) {
+    var child = templateContainer.getChild(j);
+    if (!child) continue;
+    var copy;
+    try {
+      copy = child.copy();
+    } catch (e2) {
+      copy = null;
+    }
+    if (!copy) continue;
+    if (insertChildCopy_(targetContainer, insertAt, copy)) {
+      insertAt++;
+    }
+  }
+
+  return { synced: true };
+}
+
+function getDocSectionContainer_(doc, sectionName) {
+  var s = String(sectionName || 'body').toLowerCase();
+  if (s === 'header') return doc.getHeader();
+  if (s === 'footer') return doc.getFooter();
+  return doc.getBody();
+}
+
+function shouldUseZoneSyncForConfig_(configId, opts) {
+  var o = opts && typeof opts === 'object' ? opts : {};
+  if (o.zoneSync === false) return false;
+  if (o.zoneSync === true) return true;
+  var id = String(configId || '');
+  // Default: robust for docs that are typically updated later
+  return id === 'bafa_04_managementbewertung' || id === 'bafa_10_auditbericht';
+}
+
+function syncZonesFromTemplate_(targetDocId, templateDocId, opts) {
+  var o = opts && typeof opts === 'object' ? opts : {};
+  var sections = Array.isArray(o.zoneSections) && o.zoneSections.length ? o.zoneSections : ['body'];
+
+  var targetDoc = DocumentApp.openById(targetDocId);
+  var templateDoc = DocumentApp.openById(templateDocId);
+
+  var synced = [];
+  var notFound = [];
+
+  sections.forEach(function (sectionName) {
+    var targetContainer = getDocSectionContainer_(targetDoc, sectionName);
+    var templateContainer = getDocSectionContainer_(templateDoc, sectionName);
+    if (!targetContainer || !templateContainer) return;
+
+    var zoneNames = [];
+    if (Array.isArray(o.zoneNames) && o.zoneNames.length) {
+      zoneNames = o.zoneNames.map(function (z) {
+        return String(z || '').trim();
+      }).filter(function (z) {
+        return !!z;
+      });
+    } else {
+      zoneNames = extractZoneNamesFromContainer_(templateContainer);
+    }
+
+    zoneNames.forEach(function (zn) {
+      var r = syncSingleZoneFromTemplate_(targetContainer, templateContainer, zn);
+      if (r && r.synced) synced.push(sectionName + ':' + zn);
+      else notFound.push(sectionName + ':' + zn);
+    });
+  });
+
+  targetDoc.saveAndClose();
+
+  return { synced: synced, notFound: notFound };
+}
+
 function getCustomerFolderIdForDocs_(kundeId) {
   // Prefer existing customer implementation if available.
   if (typeof getCustomer === 'function') {
@@ -697,6 +888,18 @@ function updateBafaExistingDocument(googleDocId, configId, inputData, mode) {
   }
 
   const ctx = kundeId ? mergeStandardPlaceholders_(kundeId, structured) : { customer: null };
+
+  // Optional: Sync update-zones from template BEFORE applying placeholders/tables.
+  // Skipped for cleanupOnly mode.
+  try {
+    const opts = structured.options && typeof structured.options === 'object' ? structured.options : {};
+    const cleanupOnly = !!opts.cleanupOnly || String(mode || '').toLowerCase() === 'cleanuponly';
+    if (!cleanupOnly && cfg.templateId && shouldUseZoneSyncForConfig_(cfg.id, opts)) {
+      syncZonesFromTemplate_(googleDocId, cfg.templateId, opts);
+    }
+  } catch (e) {
+    // Zone sync is best-effort; document update should still proceed.
+  }
   const meta = applyDocReplacements_(
     googleDocId,
     structured.placeholders,
