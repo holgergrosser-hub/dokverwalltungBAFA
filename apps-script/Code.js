@@ -9,6 +9,8 @@
  * im selben Apps-Script-Projekt vorhanden sein (separate .gs Dateien sind ok).
  */
 
+// COPY_MARKER_UPDATED_AT: 2026-01-17 12:35:02
+
 // ==========================================
 // AUTHENTIFIZIERUNG
 // ==========================================
@@ -381,7 +383,15 @@ function handleUpdateExistingDocument(data, headers) {
       );
     }
 
-    const result = updateExistingDocument(googleDocId, configId, inputData, mode || 'append');
+    const isBafa = String(configId || '').indexOf('bafa_') === 0;
+    const isStructured = inputData && typeof inputData === 'object' && !Array.isArray(inputData);
+
+    let result;
+    if (isBafa && isStructured && typeof updateBafaExistingDocument === 'function') {
+      result = updateBafaExistingDocument(googleDocId, configId, inputData, mode || 'append');
+    } else {
+      result = updateExistingDocument(googleDocId, configId, inputData, mode || 'append');
+    }
 
     return createResponse(200, result, headers);
   } catch (error) {

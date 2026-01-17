@@ -19,6 +19,16 @@ function parseLines(rawText) {
     .filter(Boolean);
 }
 
+function buildDocUrlFromRecord(doc) {
+  if (!doc) return '';
+  if (doc.docUrl) return doc.docUrl;
+  if (!doc.googleDocId) return '';
+  const isSheet = String(doc.templateType || '').toLowerCase() === 'sheet';
+  return isSheet
+    ? `https://docs.google.com/spreadsheets/d/${doc.googleDocId}/edit`
+    : `https://docs.google.com/document/d/${doc.googleDocId}/edit`;
+}
+
 /**
  * BAFA Bereich (14 Dokumente)
  * - Form wird aus src/configs/bafa-configs.js generiert
@@ -35,6 +45,22 @@ function BAFABereich({ kunde, api: apiProp }) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+
+  const [customerDocuments, setCustomerDocuments] = useState([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+
+  const [formMode, setFormMode] = useState('create'); // create | update
+  const [selectedDocument, setSelectedDocument] = useState(null);
+
+  const configKeyById = useMemo(() => {
+    const map = {};
+    Object.keys(BAFA_CONFIGS).forEach((k) => {
+      const id = BAFA_CONFIGS[k]?.id;
+      if (id) map[id] = k;
+    });
+    return map;
+  }, []);
 
   const config = selectedKey ? BAFA_CONFIGS[selectedKey] : null;
 
@@ -43,7 +69,31 @@ function BAFABereich({ kunde, api: apiProp }) {
     setPlaceholderData({});
     setTableData({});
     setError(null);
+    setSuccess(null);
     setFirmendaten(null);
+    setCustomerDocuments([]);
+    setSelectedDocument(null);
+    setFormMode('create');
+  }, [kunde?.kundeId]);
+
+  const loadCustomerDocuments = async () => {
+    if (!kunde?.kundeId) return;
+    setLoadingDocs(true);
+    try {
+      const data = await api.listCustomerDocuments(kunde.kundeId);
+      const docs = data?.documents ?? [];
+      setCustomerDocuments(Array.isArray(docs) ? docs : []);
+    } catch (e) {
+      // Listing is nice-to-have; don't block document creation.
+      setCustomerDocuments([]);
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCustomerDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kunde?.kundeId]);
 
   useEffect(() => {
@@ -150,6 +200,7 @@ function BAFABereich({ kunde, api: apiProp }) {
 
     setLoading(true);
     setError(null);
+    setSuccess(null);
 
     try {
       const inputData = {
@@ -161,7 +212,15 @@ function BAFABereich({ kunde, api: apiProp }) {
         inputData.tables[table.name] = parseLines(tableData[table.name]);
       }
 
-      const result = await api.processDocumentForCustomer(kunde.kundeId, config.id, inputData);
+      const result =
+        formMode === 'update' && selectedDocument?.googleDocId
+          ? await api.updateExistingDocument(
+              selectedDocument.googleDocId,
+              config.id,
+              inputData,
+              'append'
+            )
+          : await api.processDocumentForCustomer(kunde.kundeId, config.id, inputData);
 
       if (result?.success === false) {
         throw new Error(result?.message || 'Fehler beim Erstellen');
@@ -173,8 +232,17 @@ function BAFABereich({ kunde, api: apiProp }) {
         window.open(docUrl, '_blank');
       }
 
+      setSuccess(
+        formMode === 'update'
+          ? 'Dokument wurde aktualisiert.'
+          : 'Dokument wurde erstellt.'
+      );
+
       setPlaceholderData({});
       setTableData({});
+      setSelectedDocument(null);
+      setFormMode('create');
+      await loadCustomerDocuments();
     } catch (e) {
       setError(e?.message || String(e));
     } finally {
@@ -206,6 +274,90 @@ function BAFABereich({ kunde, api: apiProp }) {
       </div>
 
       {error && <div className="info-box error">❌ {error}</div>}
+      {success && <div className="info-box">✅ {success}</div>}
+
+      <div className="info-box" style={{ marginTop: 12 }}>
+        <p>
+          <strong>Sehen / Bearbeiten</strong>
+        </p>
+        {loadingDocs ? (
+          <p>Dokumente werden geladen…</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="doc-table">
+              <thead>
+                <tr>
+                  <th>Dokument</th>
+                  <th>Status</th>
+                  <th>Aktionen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.keys(BAFA_CONFIGS).map((key) => {
+                  const c = BAFA_CONFIGS[key];
+                  const doc = customerDocuments.find((d) => String(d?.configId) === String(c?.id));
+                  const canEdit = !!doc && String(c?.templateType || 'doc') !== 'sheet';
+                  return (
+                    <tr key={c.id}>
+                      <td>{c.name}</td>
+                      <td>{doc ? '✅ Vorhanden' : '❌ Fehlt'}</td>
+                      <td>
+                        {doc ? (
+                          <>
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              onClick={() => {
+                                const url = buildDocUrlFromRecord(doc);
+                                if (url) window.open(url, '_blank');
+                              }}
+                            >
+                              Öffnen
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              disabled={!canEdit}
+                              title={!canEdit ? 'Bearbeiten aktuell nur für Google Docs' : ''}
+                              onClick={() => {
+                                setError(null);
+                                setSuccess(null);
+                                setFormMode('update');
+                                setSelectedDocument(doc);
+                                setSelectedKey(configKeyById[c.id] || key);
+                                setPlaceholderData({});
+                                setTableData({});
+                              }}
+                            >
+                              Bearbeiten
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => {
+                              setError(null);
+                              setSuccess(null);
+                              setFormMode('create');
+                              setSelectedDocument(null);
+                              setSelectedKey(key);
+                              setPlaceholderData({});
+                              setTableData({});
+                            }}
+                          >
+                            Erstellen
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div className="form-group">
         <label>Dokumenttyp wählen:</label>
@@ -234,8 +386,29 @@ function BAFABereich({ kunde, api: apiProp }) {
 
       {config && (
         <div className="document-form">
-          <h3>{config.name}</h3>
+          <h3>
+            {formMode === 'update' ? '✏️ ' : '➕ '}
+            {config.name}
+          </h3>
           <p className="description">{config.description}</p>
+
+          {formMode === 'update' && selectedDocument?.googleDocId && (
+            <div className="info-box">
+              <p>
+                <strong>Aktualisiere bestehendes Dokument:</strong>{' '}
+                {selectedDocument.documentName || selectedDocument.googleDocId}
+              </p>
+              <p>
+                <a
+                  href={buildDocUrlFromRecord(selectedDocument)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  In Google öffnen →
+                </a>
+              </p>
+            </div>
+          )}
 
           {config.note && <div className="info-box warning">⚠️ {config.note}</div>}
 
@@ -299,8 +472,29 @@ function BAFABereich({ kunde, api: apiProp }) {
 
           <div className="form-actions">
             <button onClick={handleCreate} disabled={loading} className="btn-primary">
-              {loading ? 'Erstelle Dokument…' : '📄 BAFA-Dokument erstellen'}
+              {loading
+                ? formMode === 'update'
+                  ? 'Aktualisiere…'
+                  : 'Erstelle Dokument…'
+                : formMode === 'update'
+                  ? '💾 BAFA-Dokument aktualisieren'
+                  : '📄 BAFA-Dokument erstellen'}
             </button>
+            {formMode === 'update' && (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setFormMode('create');
+                  setSelectedDocument(null);
+                  setError(null);
+                  setSuccess(null);
+                }}
+                style={{ marginLeft: 8 }}
+              >
+                Abbrechen
+              </button>
+            )}
           </div>
 
           <div className="info-box" style={{ marginTop: 16 }}>

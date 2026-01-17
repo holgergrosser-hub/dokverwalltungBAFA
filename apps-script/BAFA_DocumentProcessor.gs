@@ -10,6 +10,8 @@
  * inputData = { placeholders: {KEY: value}, tables: { tableName: ["a|b", ...] } }
  */
 
+// COPY_MARKER_UPDATED_AT: 2026-01-17 12:35:02
+
 const BAFA_CONFIGS_ = {
   bafa_01_beraterbewertung: {
     id: 'bafa_01_beraterbewertung',
@@ -224,8 +226,115 @@ function mergeStandardPlaceholders_(kundeId, structured) {
   var webpage = pickFirst_(firmendaten, ['webpage', 'homepage', 'website', 'webseite']);
   addPlaceholderWithVariants_(placeholders, 'Webpage', webpage);
 
+  // Logo placeholder variants (template often uses LOGO_URL)
+  var logo = '';
+  if (customer) {
+    logo = pickFirst_(customer, ['logoUrl', 'logoFileId', 'logoId']);
+  }
+  if (!logo && firmendaten) {
+    logo = pickFirst_(firmendaten, ['logoUrl', 'logo']);
+  }
+  addPlaceholderWithVariants_(placeholders, 'LOGO_URL', logo);
+
   structured.placeholders = placeholders;
   return { customer: customer, firmendaten: firmendaten };
+}
+
+const BAFA_DOKUMENTE_SHEET_NAME_ = 'DOKUMENTE';
+
+function getSpreadsheetForDocs_() {
+  // Reuse existing helper from Firmendaten.gs if present.
+  if (typeof getSpreadsheet_ === 'function') {
+    return getSpreadsheet_();
+  }
+
+  // Fallback to ScriptProperties only.
+  const props = PropertiesService.getScriptProperties();
+  const spreadsheetId = props.getProperty('SPREADSHEET_ID');
+  if (!spreadsheetId) {
+    throw new Error('SPREADSHEET_ID ist nicht gesetzt (Script Properties)');
+  }
+  return SpreadsheetApp.openById(spreadsheetId);
+}
+
+function getDocumentsSheetForTracking_() {
+  const ss = getSpreadsheetForDocs_();
+  let sheet = ss.getSheetByName(BAFA_DOKUMENTE_SHEET_NAME_);
+  if (!sheet) {
+    sheet = ss.insertSheet(BAFA_DOKUMENTE_SHEET_NAME_);
+    sheet.appendRow(['docId', 'kundeId', 'configId', 'documentName', 'googleDocId', 'docUrl', 'templateType', 'createdAt', 'updatedAt']);
+  }
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['docId', 'kundeId', 'configId', 'documentName', 'googleDocId', 'docUrl', 'templateType', 'createdAt', 'updatedAt']);
+  }
+  return sheet;
+}
+
+function nextDocId_() {
+  return 'doc_' + new Date().getTime() + '_' + Math.floor(Math.random() * 1000000);
+}
+
+function upsertDocumentTrackingRow_(kundeId, configId, documentName, googleDocId, docUrl, templateType) {
+  const sheet = getDocumentsSheetForTracking_();
+  const now = new Date().toISOString();
+  const data = sheet.getDataRange().getValues();
+
+  const idx = {
+    docId: data[0].indexOf('docId'),
+    kundeId: data[0].indexOf('kundeId'),
+    configId: data[0].indexOf('configId'),
+    documentName: data[0].indexOf('documentName'),
+    googleDocId: data[0].indexOf('googleDocId'),
+    docUrl: data[0].indexOf('docUrl'),
+    templateType: data[0].indexOf('templateType'),
+    createdAt: data[0].indexOf('createdAt'),
+    updatedAt: data[0].indexOf('updatedAt')
+  };
+
+  // If header doesn't match (older sheet), fall back to fixed positions.
+  const hasHeader = idx.kundeId >= 0 && idx.configId >= 0 && idx.googleDocId >= 0;
+
+  for (let r = 1; r < data.length; r++) {
+    const row = data[r];
+    const rowKundeId = hasHeader ? row[idx.kundeId] : row[1];
+    const rowConfigId = hasHeader ? row[idx.configId] : row[2];
+    const rowGoogleDocId = hasHeader ? row[idx.googleDocId] : row[4];
+
+    if (String(rowKundeId) === String(kundeId) && String(rowConfigId) === String(configId) && String(rowGoogleDocId) === String(googleDocId)) {
+      const rowNumber = r + 1;
+      if (hasHeader) {
+        if (idx.documentName >= 0) sheet.getRange(rowNumber, idx.documentName + 1).setValue(documentName);
+        if (idx.docUrl >= 0) sheet.getRange(rowNumber, idx.docUrl + 1).setValue(docUrl);
+        if (idx.templateType >= 0) sheet.getRange(rowNumber, idx.templateType + 1).setValue(templateType);
+        if (idx.updatedAt >= 0) sheet.getRange(rowNumber, idx.updatedAt + 1).setValue(now);
+      } else {
+        sheet.getRange(rowNumber, 4).setValue(documentName);
+        sheet.getRange(rowNumber, 6).setValue(docUrl);
+        sheet.getRange(rowNumber, 7).setValue(templateType);
+        sheet.getRange(rowNumber, 9).setValue(now);
+      }
+      return { updated: true };
+    }
+  }
+
+  const docId = nextDocId_();
+  if (hasHeader) {
+    const row = new Array(data[0].length).fill('');
+    if (idx.docId >= 0) row[idx.docId] = docId;
+    if (idx.kundeId >= 0) row[idx.kundeId] = kundeId;
+    if (idx.configId >= 0) row[idx.configId] = configId;
+    if (idx.documentName >= 0) row[idx.documentName] = documentName;
+    if (idx.googleDocId >= 0) row[idx.googleDocId] = googleDocId;
+    if (idx.docUrl >= 0) row[idx.docUrl] = docUrl;
+    if (idx.templateType >= 0) row[idx.templateType] = templateType;
+    if (idx.createdAt >= 0) row[idx.createdAt] = now;
+    if (idx.updatedAt >= 0) row[idx.updatedAt] = now;
+    sheet.appendRow(row);
+  } else {
+    sheet.appendRow([docId, kundeId, configId, documentName, googleDocId, docUrl, templateType, now, now]);
+  }
+
+  return { created: true, docId: docId };
 }
 
 function coerceStructuredInput_(inputData) {
@@ -277,8 +386,17 @@ function insertLogoIfPresent_(body, customer) {
     return false;
   }
 
-  // Try several common placeholders
-  var tokens = ['{{LOGO}}', '{{Logo}}', '{{logo}}', '{{FIRMENLOGO}}', '{{Firmenlogo}}'];
+  // Try several common placeholders (image tokens)
+  var tokens = [
+    '{{LOGO}}',
+    '{{Logo}}',
+    '{{logo}}',
+    '{{FIRMENLOGO}}',
+    '{{Firmenlogo}}',
+    '{{LOGO_URL}}',
+    '{{Logo_Url}}',
+    '{{logo_url}}'
+  ];
   var replacedAny = false;
 
   tokens.forEach(function (token) {
@@ -297,19 +415,15 @@ function insertLogoIfPresent_(body, customer) {
   return replacedAny;
 }
 
-function applyDocReplacements_(docId, placeholders, tables, customer) {
-  const doc = DocumentApp.openById(docId);
-  const body = doc.getBody();
-
-  // Optional: insert logo image where template has {{LOGO}}
-  insertLogoIfPresent_(body, customer);
+function applyPlaceholdersToContainer_(container, placeholders) {
+  if (!container) return;
 
   // Replace scalar placeholders {{KEY}}
   Object.keys(placeholders || {}).forEach(function (key) {
     const value = placeholders[key];
     const v = value === null || value === undefined ? '' : String(value);
 
-    // Try common variants of the placeholder token
+    // Candidates include explicit key and common case variants
     var candidates = [];
     candidates.push('{{' + key + '}}');
     candidates.push('{{' + String(key).toLowerCase() + '}}');
@@ -337,28 +451,117 @@ function applyDocReplacements_(docId, placeholders, tables, customer) {
     });
 
     Object.keys(uniq).forEach(function (needle) {
-      body.replaceText(escapeForRegex_(needle), v);
+      container.replaceText(escapeForRegex_(needle), v);
     });
   });
+}
 
-  // Replace tables via {{TABLE_name}} or append
+function applyTablesToBody_(body, tables, mode) {
+  if (!body) return;
+  const isAppend = String(mode || '').toLowerCase() === 'append';
+
   Object.keys(tables || {}).forEach(function (tableName) {
     const lines = tables[tableName];
     const text = Array.isArray(lines) ? lines.join('\n') : String(lines || '');
+    if (!text.trim()) return;
 
     const tablePlaceholder = '{{TABLE_' + tableName + '}}';
     const found = body.findText(escapeForRegex_(tablePlaceholder));
 
     if (found) {
-      body.replaceText(escapeForRegex_(tablePlaceholder), text);
+      if (isAppend) {
+        // Append directly after placeholder location
+        const el = found.getElement();
+        const parent = el.getParent();
+        const p = parent && parent.asParagraph ? parent.asParagraph() : null;
+        const idx = p ? body.getChildIndex(p) : -1;
+        body.replaceText(escapeForRegex_(tablePlaceholder), '');
+        if (idx >= 0) {
+          body.insertParagraph(idx + 1, text);
+        } else {
+          body.appendParagraph(text);
+        }
+      } else {
+        body.replaceText(escapeForRegex_(tablePlaceholder), text);
+      }
     } else {
+      // Fallback section
       body.appendParagraph('');
       body.appendParagraph(tableName).setHeading(DocumentApp.ParagraphHeading.HEADING2);
       body.appendParagraph(text);
     }
   });
+}
+
+function applyDocReplacements_(docId, placeholders, tables, customer, mode) {
+  const doc = DocumentApp.openById(docId);
+  const body = doc.getBody();
+
+  // Optional: insert logo image where template has LOGO tokens
+  insertLogoIfPresent_(body, customer);
+  const header = doc.getHeader();
+  const footer = doc.getFooter();
+  if (header) insertLogoIfPresent_(header, customer);
+  if (footer) insertLogoIfPresent_(footer, customer);
+
+  // Replace placeholders in body/header/footer
+  applyPlaceholdersToContainer_(body, placeholders);
+  if (header) applyPlaceholdersToContainer_(header, placeholders);
+  if (footer) applyPlaceholdersToContainer_(footer, placeholders);
+
+  // Tables are body-only (safe default)
+  applyTablesToBody_(body, tables, mode);
 
   doc.saveAndClose();
+}
+
+function updateBafaExistingDocument(googleDocId, configId, inputData, mode) {
+  if (!googleDocId) throw new Error('googleDocId fehlt');
+  if (!configId) throw new Error('configId fehlt');
+
+  const cfg = getBafaConfig_(configId);
+  if (cfg.templateType !== 'doc') {
+    throw new Error('Update wird aktuell nur für Google Docs unterstützt (nicht für Sheets).');
+  }
+
+  const structured = coerceStructuredInput_(inputData);
+
+  // Try to infer kundeId from tracking sheet (best effort)
+  var kundeId = structured.kundeId || structured.customerId || '';
+  try {
+    const sheet = getDocumentsSheetForTracking_();
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (String(row[4]) === String(googleDocId)) {
+        kundeId = row[1];
+        break;
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const ctx = kundeId ? mergeStandardPlaceholders_(kundeId, structured) : { customer: null };
+  applyDocReplacements_(googleDocId, structured.placeholders, structured.tables, ctx.customer, mode || 'append');
+
+  // Touch tracking row if available
+  try {
+    if (kundeId) {
+      upsertDocumentTrackingRow_(kundeId, cfg.id, cfg.name, googleDocId, 'https://docs.google.com/document/d/' + googleDocId + '/edit', cfg.templateType);
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  return {
+    success: true,
+    configId: cfg.id,
+    googleDocId: googleDocId,
+    docUrl: 'https://docs.google.com/document/d/' + googleDocId + '/edit',
+    updatedAt: new Date().toISOString(),
+    message: 'Dokument aktualisiert: ' + cfg.name
+  };
 }
 
 /**
@@ -381,14 +584,22 @@ function processBafaDocumentForCustomer(kundeId, configId, inputData) {
 
   const folderId = getCustomerFolderIdForDocs_(kundeId);
   const ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  const docName = cfg.name + ' - ' + kundeId + ' - ' + ts;
+  const companyName = (ctx && ctx.customer && ctx.customer.companyName) || structured.placeholders.Firmenname || kundeId;
+  const docName = cfg.name + ' - ' + companyName + ' - ' + ts;
 
   const copied = makeCopy_(cfg.templateId, docName, folderId);
   const copiedId = copied.getId();
   const url = copied.getUrl();
 
   if (cfg.templateType === 'doc') {
-    applyDocReplacements_(copiedId, structured.placeholders, structured.tables, ctx.customer);
+    applyDocReplacements_(copiedId, structured.placeholders, structured.tables, ctx.customer, 'replace');
+  }
+
+  // Track document so it can be listed/edited later
+  try {
+    upsertDocumentTrackingRow_(kundeId, cfg.id, docName, copiedId, url, cfg.templateType);
+  } catch (e) {
+    // If tracking isn't configured, still succeed creating the doc.
   }
 
   // For sheets we just copy and return URL (no structured writing yet)
@@ -397,6 +608,7 @@ function processBafaDocumentForCustomer(kundeId, configId, inputData) {
     configId: cfg.id,
     templateType: cfg.templateType,
     googleDocId: copiedId,
+    documentName: docName,
     docUrl: url,
     createdAt: new Date().toISOString(),
     message: 'Dokument erstellt: ' + cfg.name
