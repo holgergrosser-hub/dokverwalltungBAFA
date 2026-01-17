@@ -105,10 +105,21 @@ export const BAFA_CONFIGS = {
     category: 'bafa',
 
     placeholders: [
-      { key: 'BEWERTUNGSDATUM', label: 'Datum der Bewertung', type: 'date', required: true },
-      { key: 'TEILNEHMER', label: 'Teilnehmer', required: true },
+      { key: 'BEWERTUNGSDATUM', label: 'Datum der Bewertung', type: 'date', autoToday: true, required: true },
+      { key: 'TEILNEHMER', label: 'Teilnehmer', source: 'firmendaten.qmb', required: true },
       { key: 'BEWERTUNGSZEITRAUM', label: 'Bewertungszeitraum', required: true },
-      { key: 'GESAMTBEWERTUNG', label: 'Gesamtbewertung', required: false }
+      { key: 'GESAMTBEWERTUNG', label: 'Gesamtbewertung', required: false },
+
+      // Auditbericht-Platzhalter ebenfalls anbieten (Template wird gerade angepasst)
+      { key: 'AUDITDATUM', label: 'Berichtsdatum / Auditdatum', type: 'date', autoToday: true, required: false },
+      { key: 'BERICHTDATUM', label: 'Berichtdatum (falls Template nutzt {{BERICHTDATUM}})', type: 'date', autoToday: true, required: false },
+      { key: 'AUDITOR', label: 'Auditor', required: false },
+      { key: 'Teilnehmer', label: 'Teilnehmer ({{Teilnehmer}})', source: 'firmendaten.qmb', required: false },
+      { key: 'AUDITBEREICH', label: 'Auditbereich', required: false },
+      { key: 'GESAMTERGEBNIS', label: 'Gesamtergebnis', required: false },
+      { key: 'GELTUNGSBEREICH', label: 'Geltungsbereich', source: 'firmendaten.zielgruppe', required: false },
+      { key: 'ANWENDBARKEIT', label: 'Anwendbarkeit', source: 'firmendaten.anwendbarkeit', required: false },
+      { key: 'POSITIVE FESTSTELLUNGEN', label: 'Positive Feststellungen', type: 'textarea', required: false }
     ],
 
     tables: [
@@ -117,6 +128,24 @@ export const BAFA_CONFIGS = {
         title: 'Bewertungsthemen',
         inputLabel: 'Themen (ein Thema pro Zeile)',
         inputPlaceholder: 'Zielerreichung | Konform | Keine Maßnahmen'
+      },
+      {
+        name: 'feststellungen',
+        title: 'Feststellungen',
+        inputLabel: 'Feststellungen (eine pro Zeile)',
+        inputPlaceholder: 'Feststellung | Bewertung | Maßnahme'
+      },
+      {
+        name: 'Eingesehene Nachweise',
+        title: 'Eingesehene Nachweise',
+        inputLabel: 'Eingesehene Nachweise (eine pro Zeile)',
+        inputPlaceholder: 'Nachweis | Quelle/Ort | Bemerkung'
+      },
+      {
+        name: 'Auditierte Themen',
+        title: 'Auditierte Themen',
+        inputLabel: 'Auditierte Themen (eine pro Zeile)',
+        inputPlaceholder: 'Thema | Bereich/Prozess | Ergebnis/Bemerkung'
       }
     ]
   },
