@@ -285,10 +285,19 @@ export const BAFA_CONFIGS = {
     category: 'bafa',
 
     placeholders: [
-      { key: 'AUDITDATUM', label: 'Auditdatum', type: 'date', required: true },
+      { key: 'AUDITDATUM', label: 'Berichtsdatum / Auditdatum', type: 'date', autoToday: true, required: true },
+      { key: 'BERICHTDATUM', label: 'Berichtdatum (falls Template nutzt {{BERICHTDATUM}})', type: 'date', autoToday: true, required: false },
       { key: 'AUDITOR', label: 'Auditor', required: true },
+      { key: 'Teilnehmer', label: 'Teilnehmer', source: 'firmendaten.qmb', required: false },
       { key: 'AUDITBEREICH', label: 'Auditbereich', required: true },
-      { key: 'GESAMTERGEBNIS', label: 'Gesamtergebnis', required: false }
+      { key: 'GESAMTERGEBNIS', label: 'Gesamtergebnis', required: false },
+
+      // Firmendaten-Variablen, die häufig direkt im Auditbericht-Template genutzt werden
+      { key: 'GELTUNGSBEREICH', label: 'Geltungsbereich', source: 'firmendaten.zielgruppe', required: false },
+      { key: 'ANWENDBARKEIT', label: 'Anwendbarkeit', source: 'firmendaten.anwendbarkeit', required: false },
+
+      // Freitext (oft länger als ein Einzeiler)
+      { key: 'POSITIVE FESTSTELLUNGEN', label: 'Positive Feststellungen', type: 'textarea', required: false }
     ],
 
     tables: [
@@ -297,6 +306,18 @@ export const BAFA_CONFIGS = {
         title: 'Feststellungen',
         inputLabel: 'Feststellungen (eine pro Zeile)',
         inputPlaceholder: 'Feststellung | Bewertung | Maßnahme'
+      },
+      {
+        name: 'Eingesehene Nachweise',
+        title: 'Eingesehene Nachweise',
+        inputLabel: 'Eingesehene Nachweise (eine pro Zeile)',
+        inputPlaceholder: 'Nachweis | Quelle/Ort | Bemerkung'
+      },
+      {
+        name: 'Auditierte Themen',
+        title: 'Auditierte Themen',
+        inputLabel: 'Auditierte Themen (eine pro Zeile)',
+        inputPlaceholder: 'Thema | Bereich/Prozess | Ergebnis/Bemerkung'
       }
     ]
   },

@@ -40,6 +40,8 @@ function Firmendaten({ kunde, api: apiProp, onSaved }) {
     zielgruppe: '',
     zielgebiet: '',
 
+    anwendbarkeit: '',
+
     unternehmenspolitik: '',
     qualitaetspolitik: '',
     datensicherung: '',
@@ -354,6 +356,16 @@ function Firmendaten({ kunde, api: apiProp, onSaved }) {
               <label>Zielgebiet</label>
               <input name="zielgebiet" value={formData.zielgebiet || ''} onChange={handleChange} />
             </div>
+          </div>
+
+          <div className="form-group">
+            <label>Anwendbarkeit</label>
+            <textarea
+              name="anwendbarkeit"
+              value={formData.anwendbarkeit || ''}
+              onChange={handleChange}
+              placeholder="Optional: Kurze Beschreibung der Anwendbarkeit (für {{Anwendbarkeit}} im Auditbericht)"
+            />
           </div>
 
           <div className="form-group">

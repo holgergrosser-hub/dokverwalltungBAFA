@@ -13,7 +13,8 @@ const ALIASES = {
   ort: ['ort', 'stadt', 'city'],
   email: ['email', 'eMail', 'mail'],
   geschaeftsfuehrer: ['geschaeftsfuehrer', 'geschäftsfuehrer', 'geschaeftsfuehrung'],
-  qmb: ['qmb']
+  qmb: ['qmb'],
+  anwendbarkeit: ['anwendbarkeit', 'anwendbar', 'applicability']
 };
 
 function getByAliases(obj, key) {

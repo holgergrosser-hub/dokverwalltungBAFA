@@ -19,6 +19,14 @@ function parseLines(rawText) {
     .filter(Boolean);
 }
 
+function formatTodayForDateInput() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function buildDocUrlFromRecord(doc) {
   if (!doc) return '';
   if (doc.docUrl) return doc.docUrl;
@@ -162,6 +170,26 @@ function BAFABereich({ kunde, api: apiProp, firmendatenReloadKey = 0 }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firmendaten, config?.id]);
+
+  // Prefill "today" defaults for date fields (best effort)
+  useEffect(() => {
+    if (!config) return;
+    const next = { ...placeholderData };
+    let changed = false;
+
+    for (const field of config.placeholders || []) {
+      if (!field?.autoToday) continue;
+      if (String(next[field.key] || '').trim()) continue;
+      if ((field.type || 'text') !== 'date') continue;
+      next[field.key] = formatTodayForDateInput();
+      changed = true;
+    }
+
+    if (changed) {
+      setPlaceholderData(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config?.id]);
 
   const handlePlaceholderChange = (key, value) => {
     setPlaceholderData((prev) => ({
@@ -466,13 +494,24 @@ function BAFABereich({ kunde, api: apiProp, firmendatenReloadKey = 0 }) {
                     {field.required && <span className="required">*</span>}
                     {field.source && <span className="hint">(aus Firmendaten)</span>}
                   </label>
-                  <input
-                    type={field.type || 'text'}
-                    value={placeholderData[field.key] || ''}
-                    onChange={(e) => handlePlaceholderChange(field.key, e.target.value)}
-                    placeholder={field.label}
-                    required={field.required}
-                  />
+                  {String(field.type || '').toLowerCase() === 'textarea' ? (
+                    <textarea
+                      value={placeholderData[field.key] || ''}
+                      onChange={(e) => handlePlaceholderChange(field.key, e.target.value)}
+                      placeholder={field.label}
+                      required={field.required}
+                      rows={field.rows || 4}
+                      className="textarea-large"
+                    />
+                  ) : (
+                    <input
+                      type={field.type || 'text'}
+                      value={placeholderData[field.key] || ''}
+                      onChange={(e) => handlePlaceholderChange(field.key, e.target.value)}
+                      placeholder={field.label}
+                      required={field.required}
+                    />
+                  )}
                 </div>
               ))}
             </div>
