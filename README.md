@@ -81,6 +81,16 @@ Netlify Dashboard → Environment Variables:
 
 Das WebApp-Routing liegt als Referenz in `apps-script/Code.js`.
 
+## Externe Ressourcen und Automation-Tools
+
+Für erweiterte Google Docs Automation-Funktionen kann das folgende externe Toolkit als Referenz dienen:
+
+```bash
+git clone https://github.com/xebiafrance/google-docs-automation-kit.git
+```
+
+**Hinweis:** Dieses externe Repository bietet zusätzliche Patterns und Best Practices für Google Docs Automation, die als Inspiration für weitere Entwicklungen dienen können.
+
 ## Platzhalter (Reminder)
 
 Für Google-Doc-Templates (insb. **Managementbewertung** und **Auditbericht**) ist die Platzhalter-Checkliste hier hinterlegt:
